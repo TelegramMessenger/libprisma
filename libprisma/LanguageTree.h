@@ -6,12 +6,17 @@
 
 #include "Highlight.h"
 
+struct Buffer {
+    const std::string &content;
+    int64_t offset = 0;
+};
+
 class LanguageTree : public std::enable_shared_from_this<LanguageTree>
 {
 public:
     LanguageTree() = default;
 
-    void load(const std::string& path);
+    void load(const std::string& content);
 
     const Pattern* resolvePattern(size_t path);
     const Grammar* resolveGrammar(size_t path);
@@ -40,9 +45,9 @@ public:
     }
 
 private:
-    void parseLanguages(FILE* file);
-    void parseGrammars(FILE* file);
-    void parsePatterns(FILE* file);
+    void parseLanguages(Buffer &buffer);
+    void parseGrammars(Buffer &buffer);
+    void parsePatterns(Buffer &buffer);
 
     std::map<std::string, size_t> m_languages;
     std::vector<std::shared_ptr<Grammar>> m_grammars;
