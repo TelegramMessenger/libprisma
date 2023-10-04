@@ -3,78 +3,85 @@
 #include "TokenList.h"
 #include <boost/regex.hpp>
 
-void LanguageTree::load(const std::string& path)
+void LanguageTree::load(const std::string& content)
 {
-    FILE* file;
-    if (fopen_s(&file, path.c_str(), "rb") == 0)
-    {
-        parsePatterns(file);
-        parseGrammars(file);
-        parseLanguages(file);
-        fclose(file);
+    Buffer buffer{ content };
+    parsePatterns(buffer);
+    parseGrammars(buffer);
+    parseLanguages(buffer);
+}
+
+inline uint8_t freadUint8(Buffer &buffer)
+{
+    uint8_t value = 0;
+    if (buffer.offset + sizeof(uint8_t) <= buffer.content.size()) {
+        memcpy(&value, &buffer.content[buffer.offset], sizeof(uint8_t));
+        buffer.offset += sizeof(uint8_t);
     }
-}
-
-inline uint8_t freadUint8(FILE* file)
-{
-    uint8_t value;
-    fread(&value, sizeof(uint8_t), 1, file);
     return value;
 }
 
-inline uint16_t freadUint16(FILE* file)
+inline uint16_t freadUint16(Buffer &buffer)
 {
-    uint16_t value;
-    fread(&value, sizeof(uint16_t), 1, file);
+    uint16_t value = 0;
+    if (buffer.offset + sizeof(uint16_t) <= buffer.content.size()) {
+		memcpy(&value, &buffer.content[buffer.offset], sizeof(uint16_t));
+        buffer.offset += sizeof(uint16_t);
+	}
     return value;
 }
 
-inline std::string freadString(FILE* file)
+inline std::string freadString(Buffer &buffer)
 {
-    size_t length = freadUint8(file);
+    size_t length = freadUint8(buffer);
     if (length >= 254)
     {
-        length = freadUint8(file)
-            | (freadUint8(file) << 8) 
-            | (freadUint8(file) << 16);
+        size_t a = freadUint8(buffer);
+        size_t b = freadUint8(buffer);
+        size_t c = freadUint8(buffer);
+        length = a | (b << 8) | (c << 16);
     }
 
     std::string str(length, '\0');
-    fread(&str[0], sizeof(char), length, file);
+    if (buffer.offset + length <= buffer.content.size())
+	{
+		memcpy(&str[0], &buffer.content[buffer.offset], length);
+        buffer.offset += length;
+	}
     return str;
 }
 
-void LanguageTree::parseLanguages(FILE* file)
+void LanguageTree::parseLanguages(Buffer &buffer)
 {
-    uint16_t count = freadUint16(file);
+    uint16_t count = freadUint16(buffer);
 
     for (int i = 0; i < count; ++i)
     {
-        std::string name = freadString(file);
-        uint16_t index = freadUint16(file);
+        std::string name = freadString(buffer);
+        uint16_t index = freadUint16(buffer);
         m_languages.emplace(name, index);
     }
 }
 
-void LanguageTree::parseGrammars(FILE* file)
+void LanguageTree::parseGrammars(Buffer &buffer)
 {
-    uint16_t count = freadUint16(file);
+    uint16_t count = freadUint16(buffer);
 
     for (int i = 0; i < count; ++i)
     {
         auto grammar = std::make_shared<Grammar>();
-        const auto& keys = freadUint8(file);
+        const auto keys = freadUint8(buffer);
 
         for (int j = 0; j < keys; ++j)
         {
             std::vector<PatternPtr> indices;
 
-            const auto& key = freadString(file);
-            uint8_t ids = freadUint8(file);
+            const auto key = freadString(buffer);
+            uint8_t ids = freadUint8(buffer);
 
             for (int k = 0; k < ids; ++k)
             {
-                indices.push_back(PatternPtr(shared_from_this(), freadUint16(file)));
+                indices.push_back(PatternPtr(shared_from_this(), freadUint16(buffer)));
             }
 
             grammar->tokens.push_back(GrammarToken(key, indices));
@@ -84,13 +91,13 @@ void LanguageTree::parseGrammars(FILE* file)
     }
 }
 
-void LanguageTree::parsePatterns(FILE* file)
+void LanguageTree::parsePatterns(Buffer &buffer)
 {
-    uint16_t count = freadUint16(file);
+    uint16_t count = freadUint16(buffer);
 
     for (int i = 0; i < count; ++i)
     {
-        std::string item = freadString(file);
+        std::string item = freadString(buffer);
         std::string_view value(item);
         std::string alias;
 
