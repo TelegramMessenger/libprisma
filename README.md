@@ -1,8 +1,6 @@
 This is a C++ porting of [prism.js](https://github.com/PrismJS/prism) library.
 The code depends on Boost.Regex and DropBox's json11 with a small edit to preserve object keys order.
 
-third-party/json11 is the one used by tgcalls, with a small edit to preserve object keys order.
-
 Grammars file is generated from the prism source code itself.
 Generation script will be included in the future.
 
