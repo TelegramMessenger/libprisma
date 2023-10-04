@@ -1,12 +1,11 @@
 This is a C++ porting of [prism.js](https://github.com/PrismJS/prism) library.
-The code depends on Boost.Regex and DropBox's json11 with a small edit to preserve object keys order.
+The code depends on Boost.Regex, as it's a faster and more comprehensive than STD's.
 
-Grammars file is generated from the prism source code itself.
-Generation script will be included in the future.
+Grammars file is generated from prism.js source code itself, instructions later in the file.
 
-Key concepts:
+### Key concepts:
 ```cpp
-string text = ReadFile("grammars.json");
+string text = ReadFile("grammars.dat");
 m_highlighter = std::make_shared<SyntaxHighlighter>(text);
 TokenList tokens = m_highlighter->tokenize(code, language);
 
@@ -27,3 +26,11 @@ for (auto it = tokens.begin(); it != tokens.end(); ++it)
     }
 }
 ```
+
+### How to update
+As mentioned, grammars dictionary is generated starting from prism.js source code.
+Currently, this is done manually by visiting prism's [test drive](https://prismjs.com/test.html).
+Once on the page, it is necessary to select all the languages, open the browser console and paste in both `isEqual.js` and `generate.js`.
+After a few seconds, the file `grammars.dat` will be downloaded.
+
+TODO: would be great to automate this step, or at least to make the script auto-execute rather to require all the user input.

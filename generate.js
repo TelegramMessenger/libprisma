@@ -1,30 +1,3 @@
-(function(console){
-
-    console.save = function(data, filename){
-    
-        if(!data) {
-            console.error('Console.save: No data')
-            return;
-        }
-    
-        if(!filename) filename = 'console.json'
-    
-        if(typeof data === "object"){
-            data = JSON.stringify(data, undefined, 4)
-        }
-    
-        var blob = new Blob([data], {type: 'text/json'}),
-            e    = document.createEvent('MouseEvents'),
-            a    = document.createElement('a')
-    
-        a.download = filename
-        a.href = window.URL.createObjectURL(blob)
-        a.dataset.downloadurl =  ['text/json', a.download, a.href].join(':')
-        e.initMouseEvent('click', true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null)
-        a.dispatchEvent(e)
-     }
-    })(console)
-
 function unique(a, fn) {
     if (a.length === 0 || a.length === 1) {
       return a;
@@ -53,8 +26,6 @@ function uniqlo(a, fn) {
     while (size > a.length)
     return a
 }
-
-console.time("test_timer");
 
 var tempPatterns = []
 var tempLanguages = {}
@@ -170,8 +141,6 @@ function flatten(grammar) {
             indexes.push(np)
         }
 
-        /*var test = {}
-        test[token] = indexes*/
         keys[token] = indexes
         tempTokens.push(indexes)
     }
@@ -290,9 +259,6 @@ var final = {
     languages: allLanguages
 }
 
-console.save(final, "test.json")
-console.timeEnd("test_timer");
-
 const chunks = [];
 
 const writeUint16 = i => chunks.push(new Uint16Array([ i ]))
@@ -343,5 +309,5 @@ const blob = new Blob(chunks, { type: 'application/octet-binary' });
 const url = window.URL.createObjectURL(blob)
 const a = document.createElement('a')
 a.href = url
-a.download = 'lngs.dat'
+a.download = 'grammars.dat'
 a.click()
