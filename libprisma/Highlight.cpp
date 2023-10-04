@@ -1,7 +1,6 @@
 #include "Highlight.h"
 
 #include "LanguageTree.h"
-#include "TokenList.h"
 
 GrammarPtr::GrammarPtr(std::shared_ptr<LanguageTree> tree, size_t path)
     : m_tree(tree)

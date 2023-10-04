@@ -55,7 +55,7 @@ void LanguageTree::parseGrammars(const json11::Json& node)
                 }
             }
 
-            grammar->push_back(GrammarToken(key, indices));
+            grammar->tokens.push_back(GrammarToken(key, indices));
         }
 
         m_grammars.push_back(grammar);

@@ -1,7 +1,7 @@
 #pragma once
 
-#include<memory>
-#include "LanguageTree.h"
+#include <memory>
+#include <string>
 
 struct TokenListNode
 {
@@ -137,7 +137,7 @@ public:
         return true;
     }
 
-    const std::string type() const
+    const std::string &type() const
     {
         return m_type;
     }
@@ -152,10 +152,15 @@ public:
         return m_children.end();
     }
 
-    std::string alias() const
+    const std::string &alias() const
     {
         return m_alias;
     }
+
+    const TokenList &children() const
+	{
+		return m_children;
+	}
 
 public:
     std::string m_type;

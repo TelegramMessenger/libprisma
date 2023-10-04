@@ -1,4 +1,5 @@
 #include "SyntaxHighlighter.h"
+#include "LanguageTree.h"
 #include "TokenList.h"
 
 SyntaxHighlighter::SyntaxHighlighter(const std::string& languages)
@@ -33,7 +34,7 @@ TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* gram
 
 void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch)
 {
-    for (const auto& token : *grammar)
+    for (const auto& token : grammar->tokens)
     {
         int x = 0;
         for (auto j = token.cbegin(); j != token.cend(); ++j)

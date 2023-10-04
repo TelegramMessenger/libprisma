@@ -1,13 +1,14 @@
 #pragma once
 #include <sstream>
 
-#include "Highlight.h"
 #include "TokenList.h"
-#include "LanguageTree.h"
 #include <vector>
 #include <map>
 #include <optional>
 #include <format>
+
+class LanguageTree;
+struct Grammar;
 
 struct RematchOptions
 {

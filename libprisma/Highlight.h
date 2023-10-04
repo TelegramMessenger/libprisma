@@ -12,7 +12,9 @@ class TokenList;
 
 class LanguageTree;
 
-typedef std::vector<GrammarToken> Grammar;
+struct Grammar {
+    std::vector<GrammarToken> tokens;
+};
 
 class GrammarPtr
 {
@@ -123,7 +125,7 @@ public:
 
     }
 
-    std::string name() const
+    const std::string &name() const
     {
         return m_name;
     }
