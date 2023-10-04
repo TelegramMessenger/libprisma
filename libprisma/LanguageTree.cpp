@@ -3,56 +3,78 @@
 #include "TokenList.h"
 #include <boost/regex.hpp>
 
-void LanguageTree::parse(const std::string& text)
+void LanguageTree::load(const std::string& path)
 {
-    std::string parsingError;
-    auto json = json11::Json::parse(text, parsingError);
-
-    assert(json.is_object());
-
-    const auto& languages = json["languages"];
-    const auto& grammars = json["grammars"];
-    const auto& patterns = json["patterns"];
-
-    parseLanguages(languages);
-    parseGrammars(grammars);
-    parsePatterns(patterns);
-}
-
-void LanguageTree::parseLanguages(const json11::Json& node)
-{
-    assert(node.is_object());
-
-    for (const auto& kv : node.object_items())
+    FILE* file;
+    if (fopen_s(&file, path.c_str(), "rb") == 0)
     {
-        m_languages.emplace(kv.first, kv.second.int_value());
+        parsePatterns(file);
+        parseGrammars(file);
+        parseLanguages(file);
+        fclose(file);
     }
 }
 
-void LanguageTree::parseGrammars(const json11::Json& node)
+inline uint8_t freadUint8(FILE* file)
 {
-    assert(node.is_array());
+    uint8_t value;
+    fread(&value, sizeof(uint8_t), 1, file);
+    return value;
+}
 
-    for (const auto& i : node.array_items())
+inline uint16_t freadUint16(FILE* file)
+{
+    uint16_t value;
+    fread(&value, sizeof(uint16_t), 1, file);
+    return value;
+}
+
+inline std::string freadString(FILE* file)
+{
+    size_t length = freadUint8(file);
+    if (length >= 254)
+    {
+        length = freadUint8(file)
+            | (freadUint8(file) << 8) 
+            | (freadUint8(file) << 16);
+    }
+
+    std::string str(length, '\0');
+    fread(&str[0], sizeof(char), length, file);
+    return str;
+}
+
+void LanguageTree::parseLanguages(FILE* file)
+{
+    uint16_t count = freadUint16(file);
+
+    for (int i = 0; i < count; ++i)
+    {
+        std::string name = freadString(file);
+        uint16_t index = freadUint16(file);
+        m_languages.emplace(name, index);
+    }
+}
+
+void LanguageTree::parseGrammars(FILE* file)
+{
+    uint16_t count = freadUint16(file);
+
+    for (int i = 0; i < count; ++i)
     {
         auto grammar = std::make_shared<Grammar>();
-        const auto& items = i.object_items();
+        const auto& keys = freadUint8(file);
 
-        for (const auto& key : items.keys())
+        for (int j = 0; j < keys; ++j)
         {
             std::vector<PatternPtr> indices;
 
-            const auto& kv = i[key];
-            if (kv.is_number())
+            const auto& key = freadString(file);
+            uint8_t ids = freadUint8(file);
+
+            for (int k = 0; k < ids; ++k)
             {
-                indices.push_back(PatternPtr(shared_from_this(), kv.int_value()));
-            }
-            else
-            {
-                for (const auto& jv : kv.array_items())
-                {
-                    indices.push_back(PatternPtr(shared_from_this(), jv.int_value()));
-                }
+                indices.push_back(PatternPtr(shared_from_this(), freadUint16(file)));
             }
 
             grammar->tokens.push_back(GrammarToken(key, indices));
@@ -62,37 +84,14 @@ void LanguageTree::parseGrammars(const json11::Json& node)
     }
 }
 
-inline std::string getString(const std::map<std::string, json11::Json>& items, std::string key, std::string defaultValue)
+void LanguageTree::parsePatterns(FILE* file)
 {
-    const auto value = items.find(key);
-    if (value != items.end())
+    uint16_t count = freadUint16(file);
+
+    for (int i = 0; i < count; ++i)
     {
-        return value->second.string_value();
-    }
-
-    return defaultValue;
-}
-
-inline size_t getInt(const std::map<std::string, json11::Json>& items, std::string key, size_t defaultValue)
-{
-    const auto value = items.find(key);
-    if (value != items.end())
-    {
-        return value->second.int_value();
-    }
-
-    return defaultValue;
-}
-
-void LanguageTree::parsePatterns(const json11::Json& node)
-{
-    assert(node.is_array());
-
-    for (const auto& item : node.array_items())
-    {
-        assert(item.is_string());
-
-        std::string_view value = item.string_value();
+        std::string item = freadString(file);
+        std::string_view value(item);
         std::string alias;
 
         size_t beg = value.find_first_of('/');
@@ -106,7 +105,7 @@ void LanguageTree::parsePatterns(const json11::Json& node)
             size_t aliasBeg = options.find_first_of(',');
             size_t aliasEnd = options.find_last_of(',');
 
-            std::string alias{options.substr(aliasBeg + 1, aliasEnd - (aliasBeg + 1))};
+            std::string alias{ options.substr(aliasBeg + 1, aliasEnd - (aliasBeg + 1)) };
             size_t inside = 0;
 
             if (aliasEnd + 1 < options.size())
@@ -156,11 +155,11 @@ void LanguageTree::parsePatterns(const json11::Json& node)
 
             if (inside != std::string::npos)
             {
-                m_patterns.push_back(std::make_shared<Pattern>(pattern, flags, lookbehind, greedy, std::string{alias}, std::make_shared<GrammarPtr>(shared_from_this(), inside)));
+                m_patterns.push_back(std::make_shared<Pattern>(pattern, flags, lookbehind, greedy, std::string{ alias }, std::make_shared<GrammarPtr>(shared_from_this(), inside)));
             }
             else
             {
-                m_patterns.push_back(std::make_shared<Pattern>(pattern, flags, lookbehind, greedy, std::string{alias}));
+                m_patterns.push_back(std::make_shared<Pattern>(pattern, flags, lookbehind, greedy, std::string{ alias }));
             }
         }
     }

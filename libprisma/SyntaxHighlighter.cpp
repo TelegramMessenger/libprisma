@@ -2,10 +2,10 @@
 #include "LanguageTree.h"
 #include "TokenList.h"
 
-SyntaxHighlighter::SyntaxHighlighter(const std::string& languages)
+SyntaxHighlighter::SyntaxHighlighter(const std::string& path)
 {
     m_tree = std::make_shared<LanguageTree>();
-    m_tree->parse(languages);
+    m_tree->load(path);
 }
 
 TokenList SyntaxHighlighter::tokenize(const std::string& text, const std::string& language)

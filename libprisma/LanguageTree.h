@@ -4,8 +4,6 @@
 #include <fstream>
 #include <optional>
 
-#include <third-party/json11.hpp>
-
 #include "Highlight.h"
 
 class LanguageTree : public std::enable_shared_from_this<LanguageTree>
@@ -13,7 +11,7 @@ class LanguageTree : public std::enable_shared_from_this<LanguageTree>
 public:
     LanguageTree() = default;
 
-    void parse(const std::string& languages);
+    void load(const std::string& path);
 
     const Pattern* resolvePattern(size_t path);
     const Grammar* resolveGrammar(size_t path);
@@ -42,9 +40,9 @@ public:
     }
 
 private:
-    void parseLanguages(const json11::Json& node);
-    void parseGrammars(const json11::Json& node);
-    void parsePatterns(const json11::Json& node);
+    void parseLanguages(FILE* file);
+    void parseGrammars(FILE* file);
+    void parsePatterns(FILE* file);
 
     std::map<std::string, size_t> m_languages;
     std::vector<std::shared_ptr<Grammar>> m_grammars;
