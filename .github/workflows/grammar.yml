@@ -1,0 +1,20 @@
+name: Update grammars
+
+on: [ workflow_dispatch ]
+
+jobs:
+  grammar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gen grammar
+        uses: mujo-code/puppeteer-headful@18.9.0
+        with:
+          args: node ci.js
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          commit-message: Update grammars
+          title: Update grammars
+          branch: update-grammars
