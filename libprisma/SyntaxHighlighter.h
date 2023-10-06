@@ -5,7 +5,6 @@
 #include <vector>
 #include <map>
 #include <optional>
-#include <format>
 
 class LanguageTree;
 struct Grammar;
