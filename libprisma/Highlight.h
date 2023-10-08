@@ -130,12 +130,12 @@ public:
         return m_name;
     }
 
-    constexpr std::vector<PatternPtr>::const_iterator cbegin() const noexcept
+    std::vector<PatternPtr>::const_iterator cbegin() const noexcept
     {
         return m_patterns.cbegin();
     }
 
-    constexpr std::vector<PatternPtr>::const_iterator cend() const noexcept
+    std::vector<PatternPtr>::const_iterator cend() const noexcept
     {
         return m_patterns.cend();
     }
