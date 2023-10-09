@@ -1,3 +1,52 @@
+const SCRIPTS = {}
+
+const loadScript = src => new Promise(resolve => {
+    const script = document.createElement('script')
+    script.type = 'text/javascript'
+    script.src = src
+    script.onload = script.onreadystatechange = function () {
+      if (resolve && (!this.readyState || this.readyState == 'complete')) {
+        resolve()
+        resolve = null
+      }
+    }
+    script.onerror = e => {
+      console.error(src, e);
+      if (resolve) {
+        resolve()
+        resolve = null
+      }
+    }
+    document.body.appendChild(script)
+    return script
+  })
+
+async function loadLanguages(lngs) {
+    if (lngs) {
+        lngs = Array.isArray(lngs) ? lngs : [lngs];
+
+        for (const lng of lngs) {
+            await loadLanguage(lng)
+        }
+    }
+}
+
+async function loadLanguage(lng) {
+    if (!components.languages[lng].title) {
+        return
+    }
+
+    await loadLanguages(components.languages[lng].optional)
+    await loadLanguages(components.languages[lng].require)
+
+    if (!SCRIPTS[lng]) {
+        SCRIPTS[lng] = true
+
+        // TODO: version should probably not be hardcoded
+        await loadScript(`https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-${lng}.min.js`)
+    }
+}
+
 function unique(a, fn) {
     if (a.length === 0 || a.length === 1) {
       return a;
@@ -80,8 +129,8 @@ function flatten(grammar) {
 
         // TODO: Again, none of the whitelisted languages use [], but others do.
         // Howhever, it is unclear to me how [] is supposed to work.
-        //pattern = replace(pattern, "|[])", ")");
-        //pattern = replace(pattern, ":[]", ":");
+        pattern = pattern.replaceAll("|[])", ")");
+        pattern = pattern.replaceAll(":[]", ":");
 
         return pattern
     }
@@ -149,10 +198,27 @@ function flatten(grammar) {
     return keys
 }
 
-var whitelist = [ "markup", "css", "clike", "javascript", "sql", "c", "csharp", "cpp", "aspnet", "bash", "basic", "arduino", "brainfuck", "cmake", "cobol", "ruby", "csv", "dart", "crystal", "diff", "docker", "editorconfig", "elixir", "django", "lua", "erlang", "fsharp", "fortran", "gcode", "git", "glsl", "go", "graphql", "groovy", "haskell", "http", "java", "typescript", "json", "gradle", "javadoc", "javadoclike", "jsonp", "json5", "kotlin", "latex", "php", "makefile", "markdown", "matlab", "mongodb", "objectivec", "pascal", "perl", "powershell", "protobuf", "python", "qml", "r", "regex", "rust", "scss", "scala", "smali", "swift", "vbnet", "yaml", "uri", "visual-basic", "wasm", "vim", "batch", "bbcode", "hlsl", "less", "ini" ]
+var unsupported = [
+    "bsl",
+    "coq",
+    "gherkin",
+    "jexl",
+    "kumir",
+    "pure",
+    "purescript",
+    "turtle",
+    "sparql" // requires turtle
+]
 
-whitelist.forEach(name => {
-    tempLanguages[name] = flatten(Prism.languages[name])
+await loadScript("https://prismjs.com/components.js")
+await loadLanguages(Object.keys(components.languages))
+
+Object.keys(Prism.languages).forEach(lng => {
+    if (unsupported.includes(lng) || !components.languages[lng]) {
+        return
+    }
+
+    tempLanguages[lng] = flatten(Prism.languages[lng])
 })
 
 var allTokens = uniqlo(tempTokens, isEqual)
@@ -217,13 +283,13 @@ for (var i = 0; i < allTokens.length; i++) {
     }
 }
 
-for (var i = 0; i < allGrammars.length; i++) {
+/*for (var i = 0; i < allGrammars.length; i++) {
     Object.keys(allGrammars[i]).forEach(name => {
         if (allGrammars[i][name].length == 1) {
-            //allGrammars[i][name] = allGrammars[i][name][0]
+            allGrammars[i][name] = allGrammars[i][name][0]
         }
     })
-}
+}*/
 
 for (var i = 0; i < allPatterns.length; i++) {
     if (allPatterns[i].pattern) {
@@ -251,6 +317,15 @@ Object.keys(tempLanguages).forEach(name => {
     }
 
     allLanguages[name] = allGrammars.indexOf(find)
+
+    var alias = components.languages[name].alias
+    if (alias) {
+        alias = Array.isArray(alias) ? alias : [alias];
+
+        for (const lng of alias) {
+            allLanguages[lng] = allGrammars.indexOf(find)
+        }
+    }
 })
 
 var final = {
@@ -292,7 +367,7 @@ for (var i = 0; i < allGrammars.length; i++) {
         writeString(name)
         writeUint8(allGrammars[i][name].length)
         allGrammars[i][name].forEach(id => {
-            writeUint8(id)
+            writeUint16(id)
         })
     })
 }
