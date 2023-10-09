@@ -43,7 +43,7 @@ if (process.env.CI) {
     });
 
     // order is important
-    const scriptsToEval = ['loadLangs.js', 'isEqual.js', 'generate.js']
+    const scriptsToEval = ['isEqual.js', 'generate.js']
     for (const script of scriptsToEval) {
         const content = fs.readFileSync(script, 'utf8');
         console.log(`Evaluating ${script}`)

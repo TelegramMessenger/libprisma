@@ -208,10 +208,13 @@ var unsupported = [
     "purescript",
     "turtle",
     "sparql" // requires turtle
-]
+];
 
-await loadScript("https://prismjs.com/components.js")
-await loadLanguages(Object.keys(components.languages))
+(async () => {
+    await loadScript("https://prismjs.com/components.js");
+    await loadLanguages(Object.keys(components.languages));
+})();
+
 
 Object.keys(Prism.languages).forEach(lng => {
     if (unsupported.includes(lng) || !components.languages[lng]) {
