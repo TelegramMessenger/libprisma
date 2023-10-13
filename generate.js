@@ -211,6 +211,7 @@ var unsupported = [
     "sparql" // requires turtle
 ]
 
+await loadScript("https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js")
 await loadScript("https://prismjs.com/components.js")
 await loadLanguages(Object.keys(components.languages))
 
@@ -330,6 +331,8 @@ Object.keys(tempLanguages).forEach(name => {
             
             if (components.languages[name].aliasTitles) {
                 languageNames[lng] = components.languages[name].aliasTitles[lng]
+            } else {
+                languageNames[lng] = components.languages[name].title
             }
         }
     }
