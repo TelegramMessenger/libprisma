@@ -21,13 +21,18 @@ public:
     const Pattern* resolvePattern(size_t path);
     const Grammar* resolveGrammar(size_t path);
 
-    std::vector<std::string> keys() const
+    std::map<std::string, std::string> keys() const
     {
-        std::vector<std::string> keys;
+        std::map<std::string, std::string> keys;
 
         for (const auto& kv : m_languages)
         {
-            keys.push_back(kv.first);
+            if (kv.second.first.empty())
+            {
+                continue;
+            }
+
+            keys.emplace(kv.first, kv.second.first);
         }
 
         return keys;
@@ -38,7 +43,7 @@ public:
         const auto& value = m_languages.find(key);
         if (value != m_languages.end())
         {
-            return m_grammars[value->second].get();
+            return m_grammars[value->second.second].get();
         }
 
         return nullptr;
@@ -49,7 +54,7 @@ private:
     void parseGrammars(Buffer &buffer);
     void parsePatterns(Buffer &buffer);
 
-    std::map<std::string, size_t> m_languages;
+    std::map<std::string, std::pair<std::string, size_t>> m_languages;
     std::vector<std::shared_ptr<Grammar>> m_grammars;
     std::vector<std::shared_ptr<Pattern>> m_patterns;
 };

@@ -38,6 +38,7 @@ async function loadLanguage(lng) {
 
     await loadLanguages(components.languages[lng].optional)
     await loadLanguages(components.languages[lng].require)
+    await loadLanguages(components.languages[lng].modify)
 
     if (!SCRIPTS[lng]) {
         SCRIPTS[lng] = true
@@ -309,6 +310,7 @@ for (var i = 0; i < allPatterns.length; i++) {
 }
 
 var allLanguages = {}
+var languageNames = {}
 
 Object.keys(tempLanguages).forEach(name => {
     var find = allGrammars.find(x => isEqual(x, tempLanguages[name]))
@@ -317,6 +319,7 @@ Object.keys(tempLanguages).forEach(name => {
     }
 
     allLanguages[name] = allGrammars.indexOf(find)
+    languageNames[name] = components.languages[name].title
 
     var alias = components.languages[name].alias
     if (alias) {
@@ -324,6 +327,10 @@ Object.keys(tempLanguages).forEach(name => {
 
         for (const lng of alias) {
             allLanguages[lng] = allGrammars.indexOf(find)
+            
+            if (components.languages[name].aliasTitles) {
+                languageNames[lng] = components.languages[name].aliasTitles[lng]
+            }
         }
     }
 })
@@ -377,6 +384,11 @@ writeUint16(Object.keys(allLanguages).length)
 
 Object.keys(allLanguages).forEach(name => {
     writeString(name)
+    if (languageNames[name]) {
+        writeString(languageNames[name])
+    } else {
+        writeString("")
+    }
     writeUint16(allLanguages[name])
 })
 

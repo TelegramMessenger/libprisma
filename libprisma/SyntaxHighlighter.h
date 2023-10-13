@@ -23,7 +23,7 @@ public:
 
     TokenList tokenize(const std::string& text, const std::string& language);
 
-    std::vector<std::string> languages() const;
+    std::map<std::string, std::string> languages() const;
 
 private:
     TokenList tokenize(std::string_view text, const Grammar* grammar);

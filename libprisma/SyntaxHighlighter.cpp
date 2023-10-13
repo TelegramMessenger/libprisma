@@ -19,7 +19,7 @@ TokenList SyntaxHighlighter::tokenize(const std::string& text, const std::string
     return TokenList(text);
 }
 
-std::vector<std::string> SyntaxHighlighter::languages() const
+std::map<std::string, std::string> SyntaxHighlighter::languages() const
 {
     return m_tree->keys();
 }
