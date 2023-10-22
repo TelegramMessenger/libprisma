@@ -33,4 +33,10 @@ Currently, this is done manually by visiting prism's [test drive](https://prismj
 Once on the page, it is necessary to select all the languages, open the browser console and paste in both `isEqual.js` and `generate.js`.
 After a few seconds, the file `grammars.dat` will be downloaded.
 
-TODO: would be great to automate this step, or at least to make the script auto-execute rather to require all the user input.
+OR
+
+Use 
+```sh
+node generate-node.js
+```
+The new version of `grammars.dat` will appear in the `libprisma/grammars.dat`.
