@@ -33,7 +33,7 @@ async function loadLanguage(lng) {
 
     if (!SCRIPTS[lng]) {
         SCRIPTS[lng] = true
-
+        console.log(`Loading ${lng}`)
         // TODO: version should probably not be hardcoded
         await loadScript(`https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-${lng}.min.js`)
     }
