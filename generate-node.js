@@ -1,25 +1,16 @@
 const SCRIPTS = {}
+let include = function (src) {
+    // Some black magic of eval. Load the script from src to global scope. Source: https://stackoverflow.com/a/23699187/17140794
+    (1, eval) (src.toString())
+}
 
-const loadScript = src => new Promise(resolve => {
-    const script = document.createElement('script')
-    script.type = 'text/javascript'
-    script.src = src
-    script.onload = script.onreadystatechange = function () {
-      if (resolve && (!this.readyState || this.readyState == 'complete')) {
-        resolve()
-        resolve = null
-      }
-    }
-    script.onerror = e => {
-      console.error(src, e);
-      if (resolve) {
-        resolve()
-        resolve = null
-      }
-    }
-    document.body.appendChild(script)
-    return script
-  })
+include(require('fs').readFileSync('./isEqual.js'))
+
+async function loadScript(src) {
+    const script = await fetch(src)
+    const text = await script.text()
+    include(text)
+}
 
 async function loadLanguages(lngs) {
     if (lngs) {
@@ -396,11 +387,18 @@ async function generate() {
     })
 
     const blob = new Blob(chunks, { type: 'application/octet-binary' });
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'grammars.dat'
-    a.click()
+    console.log(blob)
+    return blob;
 }
 
-generate()
+async function saveBlob(blob, filename) {
+    console.log(`Saving ${blob} to ${filename}`)
+    const buffer = Buffer.from( await blob.arrayBuffer() )
+    require('fs').writeFileSync(filename, buffer)
+}
+
+generate().then(blob => {
+    saveBlob(blob, "grammars.dat").then(() => {
+        console.log("Done!")
+    })
+})
