@@ -77,15 +77,15 @@ function uniqlo(a, fn) {
     return a
 }
 
-var tempPatterns = []
-var tempLanguages = {}
+async function generate() {
 
-var tempTokens = []
-var tempGrammars = []
+    var tempPatterns = []
+    var tempLanguages = {}
+    var tempTokens = []
+    var tempGrammars = []
+    var weak = new WeakMap
 
-var weak = new WeakMap
-
-function flatten(grammar) {
+    function flatten(grammar) {
     var keys = {}
 
     var cache = weak.get(grammar)
@@ -197,9 +197,9 @@ function flatten(grammar) {
 
     tempGrammars.push(keys)
     return keys
-}
+    }
 
-var unsupported = [
+    var unsupported = [
     "bsl",
     "coq",
     "gherkin",
@@ -209,34 +209,34 @@ var unsupported = [
     "purescript",
     "turtle",
     "sparql" // requires turtle
-]
+    ]
 
-await loadScript("https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js")
-await loadScript("https://prismjs.com/components.js")
-await loadLanguages(Object.keys(components.languages))
-
-Object.keys(Prism.languages).forEach(lng => {
+    await loadScript("https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js")
+    await loadScript("https://prismjs.com/components.js")
+    await loadLanguages(Object.keys(components.languages))
+    
+    Object.keys(Prism.languages).forEach(lng => {
     if (unsupported.includes(lng) || !components.languages[lng]) {
         return
     }
 
     tempLanguages[lng] = flatten(Prism.languages[lng])
-})
+    })
 
-var allTokens = uniqlo(tempTokens, isEqual)
-var allGrammars = uniqlo(tempGrammars, isEqual)
-var allPatterns = uniqlo(tempPatterns, isEqual)
+    var allTokens = uniqlo(tempTokens, isEqual)
+    var allGrammars = uniqlo(tempGrammars, isEqual)
+    var allPatterns = uniqlo(tempPatterns, isEqual)
 
-Object.keys(tempLanguages).forEach(name => {
+    Object.keys(tempLanguages).forEach(name => {
     var find = allGrammars.find(x => isEqual(x, tempLanguages[name]))
     if (find === undefined) {
         debugger
     }
 
     tempLanguages[name] = find
-})
+    })
 
-for (var i = 0; i < allPatterns.length; i++) {
+    for (var i = 0; i < allPatterns.length; i++) {
     if (allPatterns[i].inside) {
         var find = allGrammars.find(x => isEqual(x, allPatterns[i].inside))
         if (find === undefined) {
@@ -245,9 +245,9 @@ for (var i = 0; i < allPatterns.length; i++) {
 
         allPatterns[i].inside = find
     }
-}
+    }
 
-for (var i = 0; i < allTokens.length; i++) {
+    for (var i = 0; i < allTokens.length; i++) {
     var token = allTokens[i]
 
     for (var j = 0; j < token.length; j++) {
@@ -258,9 +258,9 @@ for (var i = 0; i < allTokens.length; i++) {
 
         token[j] = find
     }
-}
+    }
 
-for (var i = 0; i < allGrammars.length; i++) {
+    for (var i = 0; i < allGrammars.length; i++) {
     Object.keys(allGrammars[i]).forEach(name => {
         var find = allTokens.find(x => isEqual(x, allGrammars[i][name]))
         if (find === undefined) {
@@ -269,31 +269,31 @@ for (var i = 0; i < allGrammars.length; i++) {
 
         allGrammars[i][name] = find
     })
-}
+    }
 
-for (var i = 0; i < allPatterns.length; i++) {
+    for (var i = 0; i < allPatterns.length; i++) {
     if (allPatterns[i].inside) {
         allPatterns[i].inside = allGrammars.indexOf(allPatterns[i].inside)
     }
-}
+    }
 
-for (var i = 0; i < allTokens.length; i++) {
+    for (var i = 0; i < allTokens.length; i++) {
     var token = allTokens[i]
 
     for (var j = 0; j < token.length; j++) {
         token[j] = allPatterns.indexOf(token[j])
     }
-}
+    }
 
-/*for (var i = 0; i < allGrammars.length; i++) {
-    Object.keys(allGrammars[i]).forEach(name => {
-        if (allGrammars[i][name].length == 1) {
-            allGrammars[i][name] = allGrammars[i][name][0]
-        }
-    })
-}*/
+    /*for (var i = 0; i < allGrammars.length; i++) {
+        Object.keys(allGrammars[i]).forEach(name => {
+            if (allGrammars[i][name].length == 1) {
+                allGrammars[i][name] = allGrammars[i][name][0]
+            }
+        })
+    }*/
 
-for (var i = 0; i < allPatterns.length; i++) {
+    for (var i = 0; i < allPatterns.length; i++) {
     if (allPatterns[i].pattern) {
         var patternStr = allPatterns[i].pattern + ",";
         if (allPatterns[i].alias) {
@@ -308,12 +308,12 @@ for (var i = 0; i < allPatterns.length; i++) {
     } else {
         allPatterns[i] += ",,"
     }
-}
+    }
 
-var allLanguages = {}
-var languageNames = {}
+    var allLanguages = {}
+    var languageNames = {}
 
-Object.keys(tempLanguages).forEach(name => {
+    Object.keys(tempLanguages).forEach(name => {
     var find = allGrammars.find(x => isEqual(x, tempLanguages[name]))
     if (find === undefined) {
         debugger
@@ -336,19 +336,19 @@ Object.keys(tempLanguages).forEach(name => {
             }
         }
     }
-})
+    })
 
-var final = {
+    var final = {
     patterns: allPatterns,
     grammars: allGrammars,
     languages: allLanguages
-}
+    }
 
-const chunks = [];
+    const chunks = [];
 
-const writeUint16 = i => chunks.push(new Uint16Array([ i ]))
-const writeUint8 = i => chunks.push(new Uint8Array([ i ]))
-const writeString = str => {
+    const writeUint16 = i => chunks.push(new Uint16Array([ i ]))
+    const writeUint8 = i => chunks.push(new Uint8Array([ i ]))
+    const writeString = str => {
     if (str.length < 253) {
         writeUint8(str.length)
     } else {
@@ -358,19 +358,19 @@ const writeString = str => {
         writeUint8((str.length >> 16) & 0xFF)
     }
     chunks.push(new Uint8Array(str.split('').map(char => char.charCodeAt(0))))
-}
+    }
 
-// Patterns
-writeUint16(allPatterns.length)
+    // Patterns
+    writeUint16(allPatterns.length)
 
-allPatterns.forEach(pattern => {
+    allPatterns.forEach(pattern => {
     writeString(pattern)
-})
+    })
 
-// Grammars
-writeUint16(allGrammars.length)
+    // Grammars
+    writeUint16(allGrammars.length)
 
-for (var i = 0; i < allGrammars.length; i++) {
+    for (var i = 0; i < allGrammars.length; i++) {
     writeUint8(Object.keys(allGrammars[i]).length)
     
     Object.keys(allGrammars[i]).forEach(name => {
@@ -380,24 +380,27 @@ for (var i = 0; i < allGrammars.length; i++) {
             writeUint16(id)
         })
     })
+    }
+
+    // Languages
+    writeUint16(Object.keys(allLanguages).length)
+
+    Object.keys(allLanguages).forEach(name => {
+        writeString(name)
+        if (languageNames[name]) {
+            writeString(languageNames[name])
+        } else {
+            writeString("")
+        }
+        writeUint16(allLanguages[name])
+    })
+
+    const blob = new Blob(chunks, { type: 'application/octet-binary' });
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'grammars.dat'
+    a.click()
 }
 
-// Languages
-writeUint16(Object.keys(allLanguages).length)
-
-Object.keys(allLanguages).forEach(name => {
-    writeString(name)
-    if (languageNames[name]) {
-        writeString(languageNames[name])
-    } else {
-        writeString("")
-    }
-    writeUint16(allLanguages[name])
-})
-
-const blob = new Blob(chunks, { type: 'application/octet-binary' });
-const url = window.URL.createObjectURL(blob)
-const a = document.createElement('a')
-a.href = url
-a.download = 'grammars.dat'
-a.click()
+generate()
