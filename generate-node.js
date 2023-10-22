@@ -397,8 +397,10 @@ async function saveBlob(blob, filename) {
     require('fs').writeFileSync(filename, buffer)
 }
 
+const filepath = "libprisma/grammars.dat";
+
 generate().then(blob => {
-    saveBlob(blob, "grammars.dat").then(() => {
-        console.log("Done!")
+    saveBlob(blob, filepath).then(() => {
+        console.log("Done! Saved to " + filepath)
     })
 })
