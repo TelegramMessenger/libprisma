@@ -30,6 +30,7 @@ for (auto it = tokens.begin(); it != tokens.end(); ++it)
 ### How to update
 Run 
 ```sh
+npm install
 npm start
 ```
 The new version of `grammars.dat` will appear in the `libprisma/grammars.dat`.
