@@ -35,11 +35,11 @@ async function loadLanguage(lng) {
 
     if (!SCRIPTS[lng]) {
         SCRIPTS[lng] = true
+
         langNumber += 1
-        process.stdout.clearLine(0);
-        process.stdout.cursorTo(0);
-        process.stdout.write(`${langNumber} | Loading ${lng}`);
+        console.log(`${langNumber} | Loading ${lng}`);
         // TODO: version should probably not be hardcoded
+
         await loadScript(`https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-${lng}.min.js`)
     }
 }
