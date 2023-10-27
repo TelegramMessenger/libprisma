@@ -2,7 +2,7 @@
   "name": "libprisma",
   "version": "1.0.0",
   "description": "This is a C++ porting of [prism.js](https://github.com/PrismJS/prism) library.\r The code depends on Boost.Regex, as it's a faster and more comprehensive than STD's.",
-  "main": "generate-node.js",
+  "main": "generate.js",
   "scripts": {
     "start": "node generate.js"
   },
