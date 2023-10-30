@@ -28,12 +28,12 @@ for (auto it = tokens.begin(); it != tokens.end(); ++it)
 ```
 
 ### How to update
-As mentioned, grammars dictionary is generated starting from prism.js source code.
-Currently, this is done manually by visiting prism's [test drive](https://prismjs.com/test.html).
-Once on the page, it is necessary to select all the languages, open the browser console and paste in both `isEqual.js` and `generate.js`.
-After a few seconds, the file `grammars.dat` will be downloaded.
-
-TODO: would be great to automate this step, or at least to make the script auto-execute rather to require all the user input.
+Run 
+```sh
+npm install
+npm start
+```
+The new version of `grammars.dat` will appear in the `libprisma/grammars.dat`.
 
 ### Supported languages
 | Language | Aliases |
