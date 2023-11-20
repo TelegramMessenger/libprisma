@@ -7,7 +7,6 @@ const include = function (src) {
     (1, eval)(src.toString())
 }
 
-
 async function loadScript(src) {
     const script = await fetch(src)
     const text = await script.text()
@@ -41,6 +40,15 @@ async function loadLanguage(lng) {
         // TODO: version should probably not be hardcoded
 
         await loadScript(`https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-${lng}.min.js`)
+    }
+}
+
+function loadLocalLanguage(path, code, title, alias) {
+    include(fs.readFileSync(path))
+
+    components.languages[code] = {
+        title: title,
+        alias: alias
     }
 }
 
@@ -212,6 +220,10 @@ async function generate() {
     await loadLanguages(Object.keys(components.languages))
     console.log(`\nLoaded all ${langNumber} languages`)
     console.log("Processing...")
+
+    // Manually add local definitions
+    loadLocalLanguage('./components/prism-tl.js', 'typelanguage', 'TypeLanguage', 'tl')
+
     Object.keys(Prism.languages).forEach(lng => {
         if (unsupported.includes(lng) || !components.languages[lng]) {
             return
