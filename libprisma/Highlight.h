@@ -29,17 +29,35 @@ private:
     size_t m_path;
 };
 
+class PatternRaw
+{
+public:
+    PatternRaw(std::string_view pattern, boost::regex_constants::syntax_option_type flags, bool lookbehind, bool greedy, std::string alias, std::shared_ptr<GrammarPtr> inside)
+        : m_regex(std::string{pattern})
+        , m_flags(flags)
+        , m_lookbehind(lookbehind)
+        , m_greedy(greedy)
+        , m_alias(alias)
+        , m_inside(inside)
+    {
+    }
+
+    std::shared_ptr<Pattern> realize();
+
+private:
+    std::string m_regex;
+    boost::regex_constants::syntax_option_type m_flags;
+    bool m_lookbehind;
+    bool m_greedy;
+    std::string m_alias;
+    std::shared_ptr<GrammarPtr> m_inside;
+};
+
 class Pattern
 {
 public:
-    Pattern(std::string_view pattern, boost::regex_constants::syntax_option_type flags, bool lookbehind, bool greedy, std::string alias, GrammarPtr inside)
-        : Pattern(pattern, flags, lookbehind, greedy, alias, std::make_shared<GrammarPtr>(inside))
-    {
-
-    }
-
-    Pattern(std::string_view pattern, boost::regex_constants::syntax_option_type flags, bool lookbehind = false, bool greedy = false, std::string alias = "", std::shared_ptr<GrammarPtr> inside = nullptr)
-        : m_regex(boost::regex(std::string{pattern}, flags | boost::regex_constants::optimize))
+    Pattern(std::string_view pattern, boost::regex_constants::syntax_option_type flags, bool lookbehind, bool greedy, std::string alias, std::shared_ptr<GrammarPtr> inside)
+        : m_regex(boost::regex(std::string{ pattern }, flags | boost::regex_constants::optimize))
         , m_lookbehind(lookbehind)
         , m_greedy(greedy)
         , m_alias(alias)

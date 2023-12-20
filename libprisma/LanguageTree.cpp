@@ -96,6 +96,8 @@ void LanguageTree::parsePatterns(Buffer &buffer)
 {
     uint16_t count = freadUint16(buffer);
 
+    m_patterns.resize(count);
+
     for (int i = 0; i < count; ++i)
     {
         std::string item = freadString(buffer);
@@ -163,11 +165,11 @@ void LanguageTree::parsePatterns(Buffer &buffer)
 
             if (inside != std::string::npos)
             {
-                m_patterns.push_back(std::make_shared<Pattern>(pattern, flags, lookbehind, greedy, std::string{ alias }, std::make_shared<GrammarPtr>(shared_from_this(), inside)));
+                m_patternsRaw.push_back(std::make_shared<PatternRaw>(pattern, flags, lookbehind, greedy, std::string{ alias }, std::make_shared<GrammarPtr>(shared_from_this(), inside)));
             }
             else
             {
-                m_patterns.push_back(std::make_shared<Pattern>(pattern, flags, lookbehind, greedy, std::string{ alias }));
+                m_patternsRaw.push_back(std::make_shared<PatternRaw>(pattern, flags, lookbehind, greedy, std::string{ alias }, nullptr));
             }
         }
     }
@@ -175,7 +177,16 @@ void LanguageTree::parsePatterns(Buffer &buffer)
 
 const Pattern* LanguageTree::resolvePattern(size_t path)
 {
-    return m_patterns[path].get();
+    std::shared_ptr<Pattern> &parsed = m_patterns[path];
+    if (parsed == nullptr)
+    {
+        parsed = m_patternsRaw[path]->realize();
+
+        m_patternsRaw[path] = nullptr;
+        m_patterns[path] = parsed;
+    }
+
+    return parsed.get();
 }
 
 const Grammar* LanguageTree::resolveGrammar(size_t path)

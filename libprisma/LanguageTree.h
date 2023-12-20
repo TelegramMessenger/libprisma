@@ -57,4 +57,5 @@ private:
     std::map<std::string, std::pair<std::string, size_t>> m_languages;
     std::vector<std::shared_ptr<Grammar>> m_grammars;
     std::vector<std::shared_ptr<Pattern>> m_patterns;
+    std::vector<std::shared_ptr<PatternRaw>> m_patternsRaw;
 };

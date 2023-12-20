@@ -44,9 +44,9 @@ void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList
                 return;
             }
 
-            const auto& pattern = *j;
-            const auto& inside = pattern->inside();
-            const bool greedy = pattern->greedy();
+            const auto& pattern = *j->get();
+            const auto& inside = pattern.inside();
+            const bool greedy = pattern.greedy();
 
             size_t pos = startPos;
 
@@ -81,7 +81,7 @@ void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList
 
                 if (greedy)
                 {
-                    match = pattern->match(matchSuccess, matchIndex, text);
+                    match = pattern.match(matchSuccess, matchIndex, text);
                     if (!matchSuccess || matchIndex >= text.length())
                     {
                         break;
@@ -125,7 +125,7 @@ void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList
                 else
                 {
                     matchIndex = 0;
-                    match = pattern->match(matchSuccess, matchIndex, str);
+                    match = pattern.match(matchSuccess, matchIndex, str);
                     if (!matchSuccess)
                     {
                         continue;
@@ -165,7 +165,7 @@ void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList
 
                 currentNode = tokenList.addAfter(removeFrom, token.name(),
                     std::move(tokenEntries),
-                    pattern->alias(),
+                    pattern.alias(),
                     match.size());
 
                 if (after.size())
