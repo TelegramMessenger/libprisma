@@ -24,6 +24,11 @@ std::map<std::string, std::string> SyntaxHighlighter::languages() const
     return m_tree->keys();
 }
 
+std::string SyntaxHighlighter::languageName(const std::string& language) const
+{
+    return m_tree->languageName(language);
+}
+
 TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* grammar)
 {
     TokenList tokenList(text);

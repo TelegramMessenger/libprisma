@@ -25,6 +25,8 @@ public:
 
     std::map<std::string, std::string> languages() const;
 
+    std::string languageName(const std::string& language) const;
+
 private:
     TokenList tokenize(std::string_view text, const Grammar* grammar);
     void matchGrammar(std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch);

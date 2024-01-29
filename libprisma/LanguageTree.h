@@ -38,6 +38,17 @@ public:
         return keys;
     }
 
+    std::string languageName(const std::string& language) const
+    {
+        const auto& find = m_languages.find(language);
+        if (find != m_languages.end())
+        {
+            return find->second.first;
+        }
+
+        return language;
+    }
+
     const Grammar* find(const std::string& key) const
     {
         const auto& value = m_languages.find(key);
