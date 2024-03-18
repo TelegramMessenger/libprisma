@@ -223,6 +223,10 @@ async function generate() {
 
     // Manually add local definitions
     loadLocalLanguage('./components/prism-tl.js', 'typelanguage', 'TypeLanguage', 'tl')
+    loadLocalLanguage('./components/prism-tlb.js', 'tlb', 'TypeLanguage-Binary', 'tlb')
+    loadLocalLanguage('./components/prism-fift.js', 'fift', 'Fift', 'fift')
+    loadLocalLanguage('./components/prism-func.js', 'func', 'FunC', 'func')
+    loadLocalLanguage('./components/prism-tact.js', 'tact', 'Tact', 'tact')
 
     Object.keys(Prism.languages).forEach(lng => {
         if (unsupported.includes(lng) || !components.languages[lng]) {
