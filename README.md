@@ -129,10 +129,12 @@ The new version of `grammars.dat` will appear in the `libprisma/grammars.dat`.
 |`F#`|`fsharp`|
 |`Factor`|`factor`|
 |`False`|`false`|
+|`Fift`|`fift`|
 |`Firestore security rules`|`firestore-security-rules`|
 |`Flow`|`flow`|
 |`Fortran`|`fortran`|
 |`FreeMarker Template Language`|`ftl`|
+|`FunC`|`func`|
 |`GameMaker Language`|`gml`,`gamemakerlanguage`|
 |`GAP (CAS)`|`gap`|
 |`G-code`|`gcode`|
@@ -290,6 +292,7 @@ The new version of `grammars.dat` will appear in the `libprisma/grammars.dat`.
 |`SuperCollider`|`supercollider`,`sclang`|
 |`Swift`|`swift`|
 |`Systemd configuration file`|`systemd`|
+|`Tact`|`tact`|
 |`T4 templating`|`t4-templating`|
 |`T4 Text Templates (C#)`|`t4-cs`,`t4`|
 |`VB.Net`|`vbnet`|
@@ -299,6 +302,8 @@ The new version of `grammars.dat` will appear in the `libprisma/grammars.dat`.
 |`Template Toolkit 2`|`tt2`|
 |`TOML`|`toml`|
 |`Tremor`|`tremor`,`tremor`,`trickle`,`troy`|
+|`Type Language`|`tl`|
+|`Type Language - Binary`|`tlb`|
 |`TypoScript`|`typoscript`,`tsconfig`|
 |`UnrealScript`|`unrealscript`,`unrealscript`,`uscript`,`uc`|
 |`UO Razor Script`|`uorazor`|
