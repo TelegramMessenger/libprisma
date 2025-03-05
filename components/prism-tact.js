@@ -1,7 +1,7 @@
 /**
  * @file Prism.js definition for Tact
  * @link https://tact-lang.org
- * @version 1.5.0
+ * @version 1.6.0
  * @author Novus Nota (https://github.com/novusnota)
  * @license MIT
  */
@@ -10,7 +10,7 @@
     // reserved keywords
     'keyword': [
       {
-        pattern: /\b(?:abstract|asm|as|catch|const|contract(?!:)|do|else|extend|extends|foreach|fun|get|if|in|import|initOf|inline|let|message(?!:)|mutates|native|override|primitive|public|repeat|return|self|struct(?!:)|trait(?!:)|try|until|virtual|while|with)\b/,
+        pattern: /\b(?:abstract|asm|as|catch|codeOf|const|contract(?!:)|do|else|extend|extends|foreach|fun|get|if|in|import|initOf|inline|let|message(?!:)|mutates|native|override|primitive|public|repeat|return|self|struct(?!:)|trait(?!:)|try|until|virtual|while|with)\b/,
       },
       { // reserved function names
         pattern: /\b(?:bounced|external|init|receive)\b(?=\()/
@@ -23,7 +23,7 @@
         pattern: /\b(?:Address|Bool|Builder|Cell|Int|Slice|String|StringBuilder)\b/,
       },
       { // keyword after as, see: https://prismjs.com/extending.html#object-notation
-        pattern: /(\bas\s+)(?:coins|remaining|bytes32|bytes64|int257|u?int(?:2[0-5][0-6]|1[0-9][0-9]|[1-9][0-9]?))\b/,
+        pattern: /(\bas\s+)(?:coins|varu?int(?:32|16)|remaining|bytes(?:32|64)|int257|u?int(?:25[0-6]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]?))\b/,
         lookbehind: true,
         greedy: true,
       },
@@ -110,7 +110,7 @@
     ],
 
     'operator': {
-      'pattern': /![!=]?|->|[+\-*/%=]=?|[<>]=|<<?|>>?|~|\|[\|=]?|&[&=]?|\^=?/,
+      'pattern': /![!=]?|->|[+\-*/%=]=?|[<>]=|<<?=?|>>?=?|~|\|\|=|\|[\|=]?|&&=|&[&=]?|\^=?/,
     },
 
     'variable': {
