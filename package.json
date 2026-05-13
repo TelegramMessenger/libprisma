@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/TelegramMessenger/libprisma#readme",
   "dependencies": {
-    "lodash.isequal": "^4.5.0"
+    "lodash.isequal": "^4.5.0",
+    "prismjs": "1.29.0"
   }
 }

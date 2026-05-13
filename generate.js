@@ -1,16 +1,14 @@
 const fs = require('fs')
 const isEqual = require('lodash.isequal')
+const Prism = require('prismjs')
+const components = require('prismjs/components.js')
+
+global.Prism = Prism
 
 const SCRIPTS = {}
 const include = function (src) {
     // Some black magic of eval. Load the script from src to global scope. Source: https://stackoverflow.com/a/23699187/17140794
     (1, eval)(src.toString())
-}
-
-async function loadScript(src) {
-    const script = await fetch(src)
-    const text = await script.text()
-    include(text)
 }
 
 async function loadLanguages(lngs) {
@@ -39,7 +37,7 @@ async function loadLanguage(lng) {
         console.log(`${langNumber} | Loading ${lng}`);
         // TODO: version should probably not be hardcoded
 
-        await loadScript(`https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-${lng}.min.js`)
+        require(`prismjs/components/prism-${lng}.js`)
     }
 }
 
@@ -215,8 +213,6 @@ async function generate() {
         "sparql" // requires turtle
     ]
 
-    await loadScript("https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js")
-    await loadScript("https://prismjs.com/components.js")
     await loadLanguages(Object.keys(components.languages))
     console.log(`\nLoaded all ${langNumber} languages`)
     console.log("Processing...")
