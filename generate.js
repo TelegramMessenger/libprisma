@@ -104,6 +104,27 @@ function normalizeEscapes(pattern) {
     return result
 }
 
+// A character written literally in a grammar - BQN's •, APL's ⍵ - has to reach the readers as
+// an escape rather than as itself: they disagree about what the bytes of a pattern mean, and
+// \uXXXX is the one spelling all of them read as a code point. An astral character is two code
+// units here, so it becomes a surrogate pair, which UnicodeEscapes.h puts back together.
+function escapeNonAscii(pattern) {
+    if (!/[^\x00-\x7F]/.test(pattern)) {
+        return pattern
+    }
+
+    let result = ''
+
+    for (let i = 0; i < pattern.length; i++) {
+        const code = pattern.charCodeAt(i)
+        result += code > 0x7F
+            ? '\\u' + code.toString(16).padStart(4, '0')
+            : pattern[i]
+    }
+
+    return result
+}
+
 function unique(a, fn) {
     if (a.length === 0 || a.length === 1) {
         return a;
@@ -189,7 +210,7 @@ async function generate() {
             pattern = pattern.replaceAll("|[])", ")");
             pattern = pattern.replaceAll(":[]", ":");
 
-            return normalizeEscapes(pattern)
+            return escapeNonAscii(normalizeEscapes(pattern))
         }
 
         for (var token in copy) {
@@ -413,15 +434,18 @@ async function generate() {
     const writeUint16 = i => chunks.push(new Uint16Array([i]))
     const writeUint8 = i => chunks.push(new Uint8Array([i]))
     const writeString = str => {
-        if (str.length < 253) {
-            writeUint8(str.length)
+        // one byte per code unit truncated anything above U+00FF; the length is the byte
+        // count, which is what the readers advance by
+        const bytes = new TextEncoder().encode(str)
+        if (bytes.length < 253) {
+            writeUint8(bytes.length)
         } else {
             writeUint8(254 & 0xFF)
-            writeUint8(str.length & 0xFF)
-            writeUint8((str.length >> 8) & 0xFF)
-            writeUint8((str.length >> 16) & 0xFF)
+            writeUint8(bytes.length & 0xFF)
+            writeUint8((bytes.length >> 8) & 0xFF)
+            writeUint8((bytes.length >> 16) & 0xFF)
         }
-        chunks.push(new Uint8Array(str.split('').map(char => char.charCodeAt(0))))
+        chunks.push(bytes)
     }
 
     // Patterns
