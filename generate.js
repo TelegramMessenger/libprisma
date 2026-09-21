@@ -50,6 +50,60 @@ function loadLocalLanguage(path, code, title, alias) {
     }
 }
 
+// Spell out the constructs whose meaning differs between regex engines, so one table can
+// serve all of them. java.util.regex reads a [ inside a character class as the start of a
+// nested class, requires a { outside one to open a quantifier, reads \0 as the start of an
+// octal escape, and reads \v as the whole vertical whitespace class rather than as U+000B.
+// All four rewrites are no-ops for ECMAScript and for Boost, which is what libprisma
+// compiles the patterns with.
+const QUANTIFIER = /^\{\d+(?:,\d*)?\}/
+
+function normalizeEscapes(pattern) {
+    let result = ''
+    let inClass = false
+
+    for (let i = 0; i < pattern.length; i++) {
+        const c = pattern[i]
+
+        if (c === '\\') {
+            if (pattern[i + 1] === '0' && !/[0-7]/.test(pattern[i + 2] || '')) {
+                result += '\\x00'
+            } else if (pattern[i + 1] === 'v') {
+                result += '\\x0B'
+            } else {
+                result += pattern.substr(i, 2)
+            }
+            i++
+            continue
+        }
+
+        if (inClass) {
+            if (c === '[') {
+                result += '\\['
+                continue
+            }
+            // && is set intersection in java.util.regex
+            if (c === '&' && pattern[i + 1] === '&') {
+                result += '\\&\\&'
+                i++
+                continue
+            }
+            if (c === ']') {
+                inClass = false
+            }
+        } else if (c === '[') {
+            inClass = true
+        } else if (c === '{' && !QUANTIFIER.test(pattern.substr(i))) {
+            result += '\\{'
+            continue
+        }
+
+        result += c
+    }
+
+    return result
+}
+
 function unique(a, fn) {
     if (a.length === 0 || a.length === 1) {
         return a;
@@ -135,7 +189,7 @@ async function generate() {
             pattern = pattern.replaceAll("|[])", ")");
             pattern = pattern.replaceAll(":[]", ":");
 
-            return pattern
+            return normalizeEscapes(pattern)
         }
 
         for (var token in copy) {
