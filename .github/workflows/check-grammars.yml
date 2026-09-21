@@ -1,0 +1,58 @@
+name: Check grammars
+
+# grammars.dat is read by libprisma with Boost and by the Android client with java.util.regex,
+# so every pattern in it has to mean the same thing to both. Regenerate the table and hold it
+# to that, rather than waiting for a language to quietly stop highlighting.
+on:
+  pull_request:
+    paths:
+      - components/**
+      - generate.js
+      - libprisma/**
+      - tools/**
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  patterns:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
+    - uses: actions/setup-node@v5
+      with:
+        node-version: 22
+
+    # the committed table is regenerated on master, so a pull request is checked against what
+    # its own components and generate.js produce
+    - run: npm ci --ignore-scripts
+    - run: npm start
+
+    - name: Escapes every engine agrees on
+      run: node tools/check-escapes.js libprisma/grammars.dat
+
+    - name: Compile every pattern with java.util.regex
+      run: |
+        javac -d tools tools/PatternProbe.java
+        java -cp tools PatternProbe libprisma/grammars.dat tools/corpus.txt java.txt
+
+    - name: Compile every pattern with Boost
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libboost-regex-dev
+        g++ -std=c++17 -O2 -o tools/probe tools/probe.cpp -lboost_regex
+        ./tools/probe libprisma/grammars.dat tools/corpus.txt boost.txt
+
+    - name: Compare what the two engines matched
+      run: |
+        if ! diff -u boost.txt java.txt > engines.diff; then
+          echo "The two engines disagree about what these patterns match."
+          echo "Each line is a pattern index followed by its start:end offsets in tools/corpus.txt."
+          head -40 engines.diff
+          exit 1
+        fi
+        echo "Boost and java.util.regex agree on every pattern."
