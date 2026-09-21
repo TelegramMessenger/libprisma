@@ -38,8 +38,12 @@
     },
   ];
 
+  /** @type {RegExp} */
+  var operator_body = /(?:!=|\?|:|%=|%|&=|&|\*=|\*|\+=|\+|->|-=|-|\/%|\/=|\/|<=>|<<=|<<|<=|<|==|=|>>=|>>|>=|>|\^>>=|\^>>|\^=|\^\/=|\^\/|\^%=|\^%|\^|\|=|\||~>>=|~>>|~\/=|~\/|~%|~)/;
+
+  // An operator only counts as one when whitespace follows it, as identifiers may contain these characters.
   /** @type {Prism.GrammarValue} */
-  var operator = /(?:!=|\?|:|%=|%|&=|&|\*=|\*|\+=|\+|->|-=|-|\/%|\/=|\/|<=>|<<=|<<|<=|<|==|=|>>=|>>|>=|>|\^>>=|\^>>|\^=|\^\/=|\^\/|\^%=|\^%|\^|\|=|\||~>>=|~>>|~\/=|~\/|~%|~)(?=\s)/;
+  var operator = new RegExp(operator_body.source + /(?=\s)/.source);
 
   /** @type {RegExp[]} */
   var var_identifier = [
@@ -118,7 +122,8 @@
         greedy: true,
       },
       { // remaining operators
-        pattern: new RegExp(/\^?_/.source + operator.source + /_/.source),
+        // operator_body, not operator: its trailing lookahead would forbid the closing _
+        pattern: new RegExp(/\^?_/.source + operator_body.source + /_/.source),
         greedy: true,
       },
       { // plain function or method name
