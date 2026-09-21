@@ -227,6 +227,7 @@ async function generate() {
     loadLocalLanguage('./components/prism-fift.js', 'fift', 'Fift', 'fift')
     loadLocalLanguage('./components/prism-func.js', 'func', 'FunC', 'func')
     loadLocalLanguage('./components/prism-tact.js', 'tact', 'Tact', 'tact')
+    loadLocalLanguage('./components/prism-tolk.js', 'tolk', 'Tolk', 'tolk')
 
     Object.keys(Prism.languages).forEach(lng => {
         if (unsupported.includes(lng) || !components.languages[lng]) {
