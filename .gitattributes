@@ -62,3 +62,4 @@
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
 libprisma/grammars.json eol=lf
+libprisma/grammars.dat linguist-generated
