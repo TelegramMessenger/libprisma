@@ -393,11 +393,11 @@ async function generate() {
             for (const lng of alias) {
                 allLanguages[lng] = allGrammars.indexOf(find)
 
-                if (components.languages[name].aliasTitles) {
-                    languageNames[lng] = components.languages[name].aliasTitles[lng]
-                } else {
-                    languageNames[lng] = components.languages[name].title
-                }
+                // aliasTitles only names the aliases whose title differs from the language's,
+                // so an alias missing from it takes the language title rather than no title:
+                // an empty one drops the alias out of SyntaxHighlighter::languages().
+                const aliasTitles = components.languages[name].aliasTitles
+                languageNames[lng] = (aliasTitles && aliasTitles[lng]) || components.languages[name].title
             }
         }
     })
