@@ -1,6 +1,15 @@
 name: Update grammars
 
-on: [ workflow_dispatch ]
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+    # grammars.dat itself is deliberately not listed: regenerating it must not trigger another run.
+    paths:
+      - components/**
+      - generate.js
+      - package.json
+      - package-lock.json
 
 permissions:
   contents: write
