@@ -1,0 +1,13 @@
+class Foo<T> where T : IBar { public int x = 1; } /* c */ // line
+<!DOCTYPE html><a href="x" [attr]='y'>{{ tpl }}</a>
+def f(a, b=[1,2], *args, **kw): return {'k': a[0]} # py
+let re = /ab[c\]]+/g; const s = `t${x}`; arr[0] ?? 3;
+SELECT * FROM t WHERE a IN (1,2) -- sql
+#include <stdio.h>
+key = value ; ini
+[section]
+- item:
+    nested: [1, 2]
+0x1F 0b1010 1.5e-3 'c' "str" :sym @attr $var %h &&x ||y
+	  tab   and trailing spaces
+#!/bin/sh
