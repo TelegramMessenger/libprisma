@@ -1,6 +1,7 @@
 #include "LanguageTree.h"
 
 #include "TokenList.h"
+#include "UnicodeEscapes.h"
 #include <boost/regex.hpp>
 
 void LanguageTree::load(const std::string& content)
@@ -165,11 +166,11 @@ void LanguageTree::parsePatterns(Buffer &buffer)
 
             if (inside != std::string::npos)
             {
-                m_patternsRaw.push_back(std::make_shared<PatternRaw>(pattern, flags, lookbehind, greedy, std::string{ alias }, std::make_shared<GrammarPtr>(shared_from_this(), inside)));
+                m_patternsRaw.push_back(std::make_shared<PatternRaw>(libprisma::widenUnicodeClasses(pattern), flags, lookbehind, greedy, std::string{ alias }, std::make_shared<GrammarPtr>(shared_from_this(), inside)));
             }
             else
             {
-                m_patternsRaw.push_back(std::make_shared<PatternRaw>(pattern, flags, lookbehind, greedy, std::string{ alias }, nullptr));
+                m_patternsRaw.push_back(std::make_shared<PatternRaw>(libprisma::widenUnicodeClasses(pattern), flags, lookbehind, greedy, std::string{ alias }, nullptr));
             }
         }
     }
