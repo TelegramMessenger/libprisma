@@ -47,6 +47,13 @@ jobs:
         g++ -std=c++17 -O2 -o tools/probe tools/probe.cpp -lboost_regex
         ./tools/probe libprisma/grammars.dat tools/corpus.txt boost.txt
 
+    - name: Check Unicode highlighting and recursion
+      run: |
+        g++ -std=c++20 -O0 -g -Ilibprisma -o tools/check-unicode \
+          tools/check-unicode.cpp libprisma/Highlight.cpp libprisma/LanguageTree.cpp \
+          libprisma/SyntaxHighlighter.cpp libprisma/TokenList.cpp -lboost_regex
+        ./tools/check-unicode libprisma/grammars.dat
+
     - name: Compare what the two engines matched
       run: |
         if ! diff -u boost.txt java.txt > engines.diff; then

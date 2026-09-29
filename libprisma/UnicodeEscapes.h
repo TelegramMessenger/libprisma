@@ -254,9 +254,7 @@ namespace libprisma
             }
         }
 
-        // a negated class drops its wide members: they exclude characters that cannot occur
-        // as bytes in valid UTF-8 anyway, and as bytes they would exclude unrelated ones
-        if (characters.negated || wide.empty())
+        if (wide.empty())
         {
             out += '[';
             if (characters.negated)
@@ -268,10 +266,15 @@ namespace libprisma
             return characters.end - begin;
         }
 
-        out += "(?:";
+        // Exclude whole UTF-8 sequences without rejecting bytes shared by other characters.
+        out += characters.negated ? "(?:(?!" : "(?:";
         if (!narrow.empty())
         {
             out += '[';
+            if (narrow.front() == '^')
+            {
+                out += '\\';
+            }
             out += narrow;
             out += ']';
             out += '|';
@@ -284,7 +287,7 @@ namespace libprisma
             }
             appendUtf8(out, wide[i]);
         }
-        out += ')';
+        out += characters.negated ? ")[\\s\\S])" : ")";
 
         return characters.end - begin;
     }
