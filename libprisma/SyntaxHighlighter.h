@@ -30,4 +30,5 @@ private:
     void matchGrammar(std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch);
 
     std::shared_ptr<LanguageTree> m_tree;
+    int m_depth = 0;
 };

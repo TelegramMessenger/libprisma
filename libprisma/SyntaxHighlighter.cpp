@@ -26,6 +26,21 @@ std::map<std::string, std::string> SyntaxHighlighter::languages() const
 
 TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* grammar)
 {
+    // Grammars may include themselves through "inside" (for example
+    // brightscript directive-statement -> expression -> brightscript),
+    // which can recurse on the same text forever and overflow the stack.
+    constexpr auto kMaxDepth = 32;
+    if (m_depth >= kMaxDepth)
+    {
+        return TokenList(text);
+    }
+    struct DepthGuard
+    {
+        int& depth;
+        DepthGuard(int& depth) : depth(++depth) {}
+        ~DepthGuard() { --depth; }
+    } guard(m_depth);
+
     TokenList tokenList(text);
     try {
         matchGrammar(text, tokenList, grammar, tokenList.head, 0, nullptr);
