@@ -1,16 +1,14 @@
 const fs = require('fs')
 const isEqual = require('lodash.isequal')
+const Prism = require('prismjs')
+const components = require('prismjs/components.js')
+
+global.Prism = Prism
 
 const SCRIPTS = {}
 const include = function (src) {
     // Some black magic of eval. Load the script from src to global scope. Source: https://stackoverflow.com/a/23699187/17140794
     (1, eval)(src.toString())
-}
-
-async function loadScript(src) {
-    const script = await fetch(src)
-    const text = await script.text()
-    include(text)
 }
 
 async function loadLanguages(lngs) {
@@ -39,7 +37,7 @@ async function loadLanguage(lng) {
         console.log(`${langNumber} | Loading ${lng}`);
         // TODO: version should probably not be hardcoded
 
-        await loadScript(`https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-${lng}.min.js`)
+        require(`prismjs/components/prism-${lng}.js`)
     }
 }
 
@@ -50,6 +48,81 @@ function loadLocalLanguage(path, code, title, alias) {
         title: title,
         alias: alias
     }
+}
+
+// Spell out the constructs whose meaning differs between regex engines, so one table can
+// serve all of them. java.util.regex reads a [ inside a character class as the start of a
+// nested class, requires a { outside one to open a quantifier, reads \0 as the start of an
+// octal escape, and reads \v as the whole vertical whitespace class rather than as U+000B.
+// All four rewrites are no-ops for ECMAScript and for Boost, which is what libprisma
+// compiles the patterns with.
+const QUANTIFIER = /^\{\d+(?:,\d*)?\}/
+
+function normalizeEscapes(pattern) {
+    let result = ''
+    let inClass = false
+
+    for (let i = 0; i < pattern.length; i++) {
+        const c = pattern[i]
+
+        if (c === '\\') {
+            if (pattern[i + 1] === '0' && !/[0-7]/.test(pattern[i + 2] || '')) {
+                result += '\\x00'
+            } else if (pattern[i + 1] === 'v') {
+                result += '\\x0B'
+            } else {
+                result += pattern.substr(i, 2)
+            }
+            i++
+            continue
+        }
+
+        if (inClass) {
+            if (c === '[') {
+                result += '\\['
+                continue
+            }
+            // && is set intersection in java.util.regex
+            if (c === '&' && pattern[i + 1] === '&') {
+                result += '\\&\\&'
+                i++
+                continue
+            }
+            if (c === ']') {
+                inClass = false
+            }
+        } else if (c === '[') {
+            inClass = true
+        } else if (c === '{' && !QUANTIFIER.test(pattern.substr(i))) {
+            result += '\\{'
+            continue
+        }
+
+        result += c
+    }
+
+    return result
+}
+
+// A character written literally in a grammar - BQN's •, APL's ⍵ - has to reach the readers as
+// an escape rather than as itself: they disagree about what the bytes of a pattern mean, and
+// \uXXXX is the one spelling all of them read as a code point. An astral character is two code
+// units here, so it becomes a surrogate pair, which UnicodeEscapes.h puts back together.
+function escapeNonAscii(pattern) {
+    if (!/[^\x00-\x7F]/.test(pattern)) {
+        return pattern
+    }
+
+    let result = ''
+
+    for (let i = 0; i < pattern.length; i++) {
+        const code = pattern.charCodeAt(i)
+        result += code > 0x7F
+            ? '\\u' + code.toString(16).padStart(4, '0')
+            : pattern[i]
+    }
+
+    return result
 }
 
 function unique(a, fn) {
@@ -137,7 +210,7 @@ async function generate() {
             pattern = pattern.replaceAll("|[])", ")");
             pattern = pattern.replaceAll(":[]", ":");
 
-            return pattern
+            return escapeNonAscii(normalizeEscapes(pattern))
         }
 
         for (var token in copy) {
@@ -215,14 +288,17 @@ async function generate() {
         "sparql" // requires turtle
     ]
 
-    await loadScript("https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js")
-    await loadScript("https://prismjs.com/components.js")
     await loadLanguages(Object.keys(components.languages))
     console.log(`\nLoaded all ${langNumber} languages`)
     console.log("Processing...")
 
     // Manually add local definitions
     loadLocalLanguage('./components/prism-tl.js', 'typelanguage', 'TypeLanguage', 'tl')
+    loadLocalLanguage('./components/prism-tlb.js', 'tlb', 'TypeLanguage-Binary', 'tlb')
+    loadLocalLanguage('./components/prism-fift.js', 'fift', 'Fift', 'fift')
+    loadLocalLanguage('./components/prism-func.js', 'func', 'FunC', ['func', 'fc'])
+    loadLocalLanguage('./components/prism-tact.js', 'tact', 'Tact', 'tact')
+    loadLocalLanguage('./components/prism-tolk.js', 'tolk', 'Tolk', 'tolk')
 
     Object.keys(Prism.languages).forEach(lng => {
         if (unsupported.includes(lng) || !components.languages[lng]) {
@@ -338,11 +414,11 @@ async function generate() {
             for (const lng of alias) {
                 allLanguages[lng] = allGrammars.indexOf(find)
 
-                if (components.languages[name].aliasTitles) {
-                    languageNames[lng] = components.languages[name].aliasTitles[lng]
-                } else {
-                    languageNames[lng] = components.languages[name].title
-                }
+                // aliasTitles only names the aliases whose title differs from the language's,
+                // so an alias missing from it takes the language title rather than no title:
+                // an empty one drops the alias out of SyntaxHighlighter::languages().
+                const aliasTitles = components.languages[name].aliasTitles
+                languageNames[lng] = (aliasTitles && aliasTitles[lng]) || components.languages[name].title
             }
         }
     })
@@ -358,15 +434,18 @@ async function generate() {
     const writeUint16 = i => chunks.push(new Uint16Array([i]))
     const writeUint8 = i => chunks.push(new Uint8Array([i]))
     const writeString = str => {
-        if (str.length < 253) {
-            writeUint8(str.length)
+        // one byte per code unit truncated anything above U+00FF; the length is the byte
+        // count, which is what the readers advance by
+        const bytes = new TextEncoder().encode(str)
+        if (bytes.length < 253) {
+            writeUint8(bytes.length)
         } else {
             writeUint8(254 & 0xFF)
-            writeUint8(str.length & 0xFF)
-            writeUint8((str.length >> 8) & 0xFF)
-            writeUint8((str.length >> 16) & 0xFF)
+            writeUint8(bytes.length & 0xFF)
+            writeUint8((bytes.length >> 8) & 0xFF)
+            writeUint8((bytes.length >> 16) & 0xFF)
         }
-        chunks.push(new Uint8Array(str.split('').map(char => char.charCodeAt(0))))
+        chunks.push(bytes)
     }
 
     // Patterns
