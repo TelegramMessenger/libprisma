@@ -38,6 +38,19 @@ public:
         return keys;
     }
 
+    // The languages as the file lists them: the generator writes each language's own name
+    // before its aliases, which is the only place that tells the two apart.
+    const std::vector<std::string>& order() const
+    {
+        return m_order;
+    }
+
+    // The display name and the grammar of a name from order().
+    const std::pair<std::string, size_t>& language(const std::string& name) const
+    {
+        return m_languages.at(name);
+    }
+
     std::string languageName(const std::string& language) const
     {
         const auto& find = m_languages.find(language);
@@ -66,6 +79,7 @@ private:
     void parsePatterns(Buffer &buffer);
 
     std::map<std::string, std::pair<std::string, size_t>> m_languages;
+    std::vector<std::string> m_order;
     std::vector<std::shared_ptr<Grammar>> m_grammars;
     std::vector<std::shared_ptr<Pattern>> m_patterns;
     std::vector<std::shared_ptr<PatternRaw>> m_patternsRaw;

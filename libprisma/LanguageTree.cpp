@@ -61,7 +61,11 @@ void LanguageTree::parseLanguages(Buffer &buffer)
         std::string name = freadString(buffer);
         std::string displayName = freadString(buffer);
         size_t index = freadUint16(buffer);
-        m_languages.emplace(name, std::pair<std::string, size_t>(displayName, index));
+
+        if (m_languages.emplace(name, std::pair<std::string, size_t>(displayName, index)).second)
+        {
+            m_order.push_back(name);
+        }
     }
 }
 

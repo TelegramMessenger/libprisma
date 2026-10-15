@@ -29,6 +29,38 @@ std::string SyntaxHighlighter::languageName(const std::string& language) const
     return m_tree->languageName(language);
 }
 
+std::vector<LanguageGroup> SyntaxHighlighter::languageGroups() const
+{
+    std::vector<LanguageGroup> groups;
+    std::map<std::pair<size_t, std::string>, size_t> index;
+
+    // A name joins the group of the first one before it with the same grammar and the same
+    // display name, which is the language it is an alias of.
+    for (const auto& name : m_tree->order())
+    {
+        const auto& language = m_tree->language(name);
+        if (language.first.empty())
+        {
+            continue;
+        }
+
+        auto key = std::make_pair(language.second, language.first);
+        auto found = index.find(key);
+
+        if (found != index.end())
+        {
+            groups[found->second].aliases.push_back(name);
+        }
+        else
+        {
+            index.emplace(key, groups.size());
+            groups.push_back(LanguageGroup{ name, language.first, {} });
+        }
+    }
+
+    return groups;
+}
+
 TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* grammar)
 {
     // Grammars may include themselves through "inside" (for example

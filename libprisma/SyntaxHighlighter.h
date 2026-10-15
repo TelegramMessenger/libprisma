@@ -9,6 +9,15 @@
 class LanguageTree;
 struct Grammar;
 
+// A language and the other names it goes by. An alias with a display name of its own (html,
+// under markup) is a language of its own here, as it is in the list a user picks from.
+struct LanguageGroup
+{
+    std::string id;
+    std::string name;
+    std::vector<std::string> aliases;
+};
+
 struct RematchOptions
 {
     std::string token;
@@ -26,6 +35,8 @@ public:
     std::map<std::string, std::string> languages() const;
 
     std::string languageName(const std::string& language) const;
+
+    std::vector<LanguageGroup> languageGroups() const;
 
 private:
     TokenList tokenize(std::string_view text, const Grammar* grammar);
