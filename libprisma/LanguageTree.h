@@ -53,8 +53,9 @@ public:
 
     std::string languageName(const std::string& language) const
     {
+        // A name with no title, as a file extension, reads as itself, as an unknown one does.
         const auto& find = m_languages.find(language);
-        if (find != m_languages.end())
+        if (find != m_languages.end() && !find->second.first.empty())
         {
             return find->second.first;
         }

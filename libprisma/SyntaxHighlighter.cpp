@@ -13,55 +13,57 @@ SyntaxHighlighter::SyntaxHighlighter(const std::string& path)
 TokenList SyntaxHighlighter::tokenize(const std::string& text, const std::string& language)
 {
     const Grammar* grammar = m_tree->find(language);
-    if (grammar)
-    {
-        return tokenize(text, grammar);
-    }
+    const Grammar* fixed = nullptr;
 
     // "<host>-<language>", as "diff-cs": the embedded-language tokens of <host> hold code in
     // <language>. Both may have dashes of their own, so every split is tried. When no
-    // <language> resolves, <host> still highlights, with its embedded-language tokens as text.
-    const Grammar* host = nullptr;
-
-    for (size_t split = language.find('-'); split != std::string::npos; split = language.find('-', split + 1))
+    // <language> resolves, <host> still highlights, finding the language in the text if it can.
+    if (!grammar)
     {
-        const Grammar* prefix = m_tree->find(language.substr(0, split));
-        if (!prefix)
+        const Grammar* host = nullptr;
+
+        for (size_t split = language.find('-'); split != std::string::npos; split = language.find('-', split + 1))
         {
-            continue;
+            const Grammar* prefix = m_tree->find(language.substr(0, split));
+            if (!prefix)
+            {
+                continue;
+            }
+
+            if (const Grammar* suffix = m_tree->find(language.substr(split + 1)))
+            {
+                grammar = prefix;
+                fixed = suffix;
+                break;
+            }
+
+            if (!host)
+            {
+                host = prefix;
+            }
         }
 
-        if (const Grammar* embedded = m_tree->find(language.substr(split + 1)))
+        if (!grammar)
         {
-            TokenList tokenList = tokenize(text, prefix);
-            highlightEmbedded(tokenList, 0, text, embedded);
-            return tokenList;
-        }
-
-        if (!host)
-        {
-            host = prefix;
+            grammar = host;
         }
     }
 
-    if (host)
+    if (!grammar)
     {
-        return tokenize(text, host);
+        return TokenList(text);
     }
 
-    return TokenList(text);
+    const Grammar* named = nullptr;
+    TokenList tokenList = tokenize(text, grammar);
+    highlightEmbedded(tokenList, 0, text, fixed, named);
+    return tokenList;
 }
 
 namespace
 {
     constexpr std::string_view kEmbeddedLanguage = "embedded-language";
-
-    struct EmbeddedPart
-    {
-        TokenListPtr node;
-        size_t offset;
-        size_t start;
-    };
+    constexpr std::string_view kEmbeddedLanguageName = "embedded-language-name";
 
     struct SliceCursor
     {
@@ -130,13 +132,17 @@ namespace
     }
 }
 
-void SyntaxHighlighter::highlightEmbedded(TokenList& tokenList, size_t pos, std::string_view text, const Grammar* embedded)
+// `fixed` is the language the caller named, which wins over any the text names. Otherwise an
+// embedded-language-name token, as a diff's file name, sets `named` for the parts after it, in
+// whichever parent they are.
+void SyntaxHighlighter::highlightEmbedded(TokenList& tokenList, size_t pos, std::string_view text, const Grammar* fixed, const Grammar*& named)
 {
     std::string content;
     std::vector<EmbeddedPart> parts;
+    const Grammar* language = nullptr;
 
-    // The embedded-language tokens under one parent are one piece of code, so a comment or a
-    // string runs on from one to the next, as it does over the context lines of a diff.
+    // A run of embedded-language tokens under one parent, in one language, is one piece of
+    // code, so a comment or a string runs on from one to the next, as over a diff's context lines.
     for (TokenListPtr node = tokenList.head->next; node != tokenList.head; pos += node->length(), node = node->next)
     {
         if (!node->isSyntax())
@@ -146,25 +152,59 @@ void SyntaxHighlighter::highlightEmbedded(TokenList& tokenList, size_t pos, std:
 
         auto& syntax = static_cast<Syntax&>(*node);
 
-        if (syntax.type() == kEmbeddedLanguage)
+        if (syntax.type() == kEmbeddedLanguageName)
         {
-            parts.push_back({ node, pos, content.size() });
-            content.append(text.substr(pos, syntax.length()));
+            if (!fixed)
+            {
+                std::string name(text.substr(pos, syntax.length()));
+                for (char& c : name)
+                {
+                    if (c >= 'A' && c <= 'Z')
+                    {
+                        c += 'a' - 'A';
+                    }
+                }
+
+                named = m_tree->find(name);
+            }
+
+            // One inside it names the language more closely, as a path's extension does.
+            highlightEmbedded(syntax.m_children, pos, text, fixed, named);
+        }
+        else if (syntax.type() == kEmbeddedLanguage)
+        {
+            const Grammar* grammar = fixed ? fixed : named;
+            if (grammar != language)
+            {
+                highlightParts(parts, content, text, language);
+                language = grammar;
+            }
+
+            if (language)
+            {
+                parts.push_back({ node, pos, content.size() });
+                content.append(text.substr(pos, syntax.length()));
+            }
         }
         else
         {
-            highlightEmbedded(syntax.m_children, pos, text, embedded);
+            highlightEmbedded(syntax.m_children, pos, text, fixed, named);
         }
     }
 
+    highlightParts(parts, content, text, language);
+}
+
+void SyntaxHighlighter::highlightParts(std::vector<EmbeddedPart>& parts, std::string& content, std::string_view text, const Grammar* language)
+{
     if (parts.empty())
     {
         return;
     }
 
-    // Its views are into `content`, which ends with this call: the parts are rebuilt from it as
+    // Its views are into `content`, which is cleared below: the parts are rebuilt from it as
     // views into `text`.
-    TokenList highlighted = tokenize(std::string_view(content), embedded);
+    TokenList highlighted = tokenize(std::string_view(content), language);
     std::vector<SliceCursor> cursors;
 
     for (const auto& part : parts)
@@ -176,6 +216,9 @@ void SyntaxHighlighter::highlightEmbedded(TokenList& tokenList, size_t pos, std:
 
         syntax.m_children.swap(children);
     }
+
+    parts.clear();
+    content.clear();
 }
 
 std::map<std::string, std::string> SyntaxHighlighter::languages() const

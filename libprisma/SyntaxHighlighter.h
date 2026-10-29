@@ -39,8 +39,18 @@ public:
     std::vector<LanguageGroup> languageGroups() const;
 
 private:
+    // An embedded-language token, where it is in the text and where its code starts once it is
+    // joined with the others of its run.
+    struct EmbeddedPart
+    {
+        TokenListPtr node;
+        size_t offset;
+        size_t start;
+    };
+
     TokenList tokenize(std::string_view text, const Grammar* grammar);
-    void highlightEmbedded(TokenList& tokenList, size_t pos, std::string_view text, const Grammar* embedded);
+    void highlightEmbedded(TokenList& tokenList, size_t pos, std::string_view text, const Grammar* fixed, const Grammar*& named);
+    void highlightParts(std::vector<EmbeddedPart>& parts, std::string& content, std::string_view text, const Grammar* language);
     void matchGrammar(std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch);
 
     std::shared_ptr<LanguageTree> m_tree;

@@ -8,6 +8,7 @@
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -72,6 +73,27 @@ bool CheckTokens(
         std::cerr << "  " << token.type << ": " << token.value << '\n';
     }
     return false;
+}
+
+// The tokens of a "---" and "+++" pair naming the same file, "a/<stem><name>" and "b/<stem><name>",
+// whose language is <name>.
+std::vector<Token> Files(const std::string& stem, const std::string& name)
+{
+    return {
+        { "coord", "--- " },
+        { "embedded-language-name", "a/" + stem },
+        { "embedded-language-name", name },
+        { "coord", "\n" },
+        { "coord", "+++ " },
+        { "embedded-language-name", "b/" + stem },
+        { "embedded-language-name", name },
+    };
+}
+
+std::vector<Token> Concat(std::vector<Token> tokens, const std::vector<Token>& more)
+{
+    tokens.insert(tokens.end(), more.begin(), more.end());
+    return tokens;
 }
 
 // CRLF line ends are read as LF ones are: the same tokens, each holding the same text but for
@@ -259,70 +281,208 @@ int main(int argc, char** argv)
             { "number", "42" },
         });
 
-    const auto diff = std::string(
-        "--- a/Foo.cs\n"
-        "+++ b/Foo.cs\n"
+    // The language the file names, or the one asked for whatever they name: as Python, "/*"
+    // would be two operators rather than a comment. One asked for that is no language leaves
+    // the file names to say.
+    const auto hunk = std::string(
         "@@ -1,4 +1,4 @@ class Foo\n"
         " /* one\n"
         "    two */\n"
         "-int x;\n"
         "+int y;\n");
-    // A language after "diff-" that is none leaves the diff as it is on its own.
-    for (const auto& language : { "diff", "diff-vue" })
+    const auto code = std::vector<Token>{
+        { "coord", "@@ -1,4 +1,4 @@ " },
+        { "keyword", "class" },
+        { "embedded-language", " " },
+        { "class-name", "Foo" },
+        { "prefix", " " },
+        { "comment", "/* one\n" },
+        { "prefix", " " },
+        { "comment", "   two */" },
+        { "embedded-language", "\n" },
+        { "prefix", "-" },
+        { "line", "int x;\n" },
+        { "prefix", "+" },
+        { "line", "int y;\n" },
+    };
+    for (const auto& [language, extension] : std::vector<std::pair<std::string, std::string>>{
+        { "diff", "cs" },
+        { "diff-cs", "py" },
+        { "diff-vue", "cs" },
+    })
     {
-        failed += !CheckTokens(
-            highlighter,
-            language,
-            diff,
-            {
-                { "coord", "--- a/Foo.cs" },
-                { "coord", "+++ b/Foo.cs" },
-                { "coord", "@@ -1,4 +1,4 @@ " },
-                { "embedded-language", "class Foo" },
-                { "prefix", " " },
-                { "embedded-language", "/* one\n" },
-                { "prefix", " " },
-                { "embedded-language", "   two */\n" },
-                { "prefix", "-" },
-                { "line", "int x;\n" },
-                { "prefix", "+" },
-                { "line", "int y;\n" },
-            });
+        const auto patch = "--- a/Foo." + extension + "\n+++ b/Foo." + extension + "\n" + hunk;
+        failed += !CheckTokens(highlighter, language, patch, Concat(Files("Foo.", extension), code));
+        failed += !CheckLineEnds(highlighter, language, patch);
     }
     failed += !CheckTokens(
         highlighter,
-        "diff-cs",
-        diff,
+        "diff",
+        hunk,
         {
-            { "coord", "--- a/Foo.cs" },
-            { "coord", "+++ b/Foo.cs" },
             { "coord", "@@ -1,4 +1,4 @@ " },
-            { "keyword", "class" },
-            { "embedded-language", " " },
-            { "class-name", "Foo" },
+            { "embedded-language", "class Foo" },
             { "prefix", " " },
-            { "comment", "/* one\n" },
+            { "embedded-language", "/* one\n" },
             { "prefix", " " },
-            { "comment", "   two */" },
-            { "embedded-language", "\n" },
+            { "embedded-language", "   two */\n" },
             { "prefix", "-" },
             { "line", "int x;\n" },
             { "prefix", "+" },
             { "line", "int y;\n" },
         });
 
-    failed += !CheckLineEnds(highlighter, "diff-cs", diff);
-
-    // The files are coloured as their lines.
+    // The files are coloured as their lines. Alone, "---" is a removed line, here a SQL comment,
+    // and names no file.
+    const auto sql = std::string(
+        "--- a/q.sql\n"
+        "+++ b/q.sql\n"
+        "@@ -1,3 +1,2 @@\n"
+        " select 1;\n"
+        "--- see helper.py\n"
+        " select 2;\n");
     failed += !CheckAliases(
         highlighter,
         "diff",
-        diff,
+        sql,
         "coord",
         {
-            { "deleted", "--- a/Foo.cs" },
-            { "inserted", "+++ b/Foo.cs" },
+            { "deleted", "--- a/q.sql" },
+            { "inserted", "+++ b/q.sql" },
+            { "deleted", "--- see helper.py" },
         });
+    failed += !CheckTokens(
+        highlighter,
+        "diff",
+        sql,
+        Concat(Files("q.", "sql"), {
+            { "coord", "@@ -1,3 +1,2 @@" },
+            { "prefix", " " },
+            { "keyword", "select" },
+            { "embedded-language", " " },
+            { "number", "1" },
+            { "punctuation", ";" },
+            { "embedded-language", "\n" },
+            { "coord", "--- see helper.py" },
+            { "prefix", " " },
+            { "keyword", "select" },
+            { "embedded-language", " " },
+            { "number", "2" },
+            { "punctuation", ";" },
+            { "embedded-language", "\n" },
+        }));
+
+    // Each file's code is in the language its name says, up to the next file: a quoted name
+    // still says it, and one that says nothing ends the language before. A deleted file's
+    // "+++ /dev/null" leaves its old name standing.
+    const auto files = std::string(
+        "--- a/x.py\n"
+        "+++ b/x.py\n"
+        "@@ -1 +1 @@\n"
+        " x = 1\n"
+        "--- \"a/\\303\\266.cs\"\n"
+        "+++ \"b/\\303\\266.cs\"\n"
+        "@@ -1 +1 @@\n"
+        " /* c */\n"
+        "--- a/foo.c~\n"
+        "+++ b/foo.c~\n"
+        "@@ -1 +1 @@\n"
+        " /* c */\n"
+        "--- a/Foo.RS\t2024-01-01 00:00:00\n"
+        "+++ /dev/null\n"
+        "@@ -1 +0,0 @@ fn main()\n"
+        " let x = 1;\n"
+        "--- a/Makefile\n"
+        "+++ b/Makefile\n"
+        "@@ -1 +1 @@\n"
+        " all:\n");
+    failed += !CheckTokens(
+        highlighter,
+        "diff",
+        files,
+        {
+            { "coord", "--- " },
+            { "embedded-language-name", "a/x." },
+            { "embedded-language-name", "py" },
+            { "coord", "\n" },
+            { "coord", "+++ " },
+            { "embedded-language-name", "b/x." },
+            { "embedded-language-name", "py" },
+            { "coord", "@@ -1 +1 @@" },
+            { "prefix", " " },
+            { "embedded-language", "x " },
+            { "operator", "=" },
+            { "embedded-language", " " },
+            { "number", "1" },
+            { "embedded-language", "\n" },
+            { "coord", "--- " },
+            { "embedded-language-name", "\"a/\\303\\266." },
+            { "embedded-language-name", "cs" },
+            { "embedded-language-name", "\"" },
+            { "coord", "\n" },
+            { "coord", "+++ " },
+            { "embedded-language-name", "\"b/\\303\\266." },
+            { "embedded-language-name", "cs" },
+            { "embedded-language-name", "\"" },
+            { "coord", "@@ -1 +1 @@" },
+            { "prefix", " " },
+            { "comment", "/* c */" },
+            { "embedded-language", "\n" },
+            { "coord", "--- " },
+            { "embedded-language-name", "a/foo.c~" },
+            { "coord", "\n" },
+            { "coord", "+++ " },
+            { "embedded-language-name", "b/foo.c~" },
+            { "coord", "@@ -1 +1 @@" },
+            { "prefix", " " },
+            { "embedded-language", "/* c */\n" },
+            { "coord", "--- " },
+            { "embedded-language-name", "a/Foo." },
+            { "embedded-language-name", "RS" },
+            { "coord", "\t2024-01-01 00:00:00" },
+            { "coord", "\n" },
+            { "coord", "+++ /dev/null" },
+            { "coord", "@@ -1 +0,0 @@ " },
+            { "keyword", "fn" },
+            { "embedded-language", " " },
+            { "function-definition", "main" },
+            { "punctuation", "(" },
+            { "punctuation", ")" },
+            { "prefix", " " },
+            { "keyword", "let" },
+            { "embedded-language", " x " },
+            { "operator", "=" },
+            { "embedded-language", " " },
+            { "number", "1" },
+            { "punctuation", ";" },
+            { "embedded-language", "\n" },
+            { "coord", "--- " },
+            { "embedded-language-name", "a/" },
+            { "embedded-language-name", "Makefile" },
+            { "coord", "\n" },
+            { "coord", "+++ " },
+            { "embedded-language-name", "b/" },
+            { "embedded-language-name", "Makefile" },
+            { "coord", "@@ -1 +1 @@" },
+            { "prefix", " " },
+            { "target", "all" },
+            { "punctuation", ":" },
+            { "embedded-language", "\n" },
+        });
+
+    // A file extension that is no language name reads as itself, as an unknown name does.
+    for (const auto& [language, name] : std::vector<std::pair<std::string, std::string>>{
+        { "rs", "rs" },
+        { "rust", "Rust" },
+        { "nope", "nope" },
+    })
+    {
+        if (highlighter.languageName(language) != name)
+        {
+            std::cerr << "Unexpected name for " << language << ": " << highlighter.languageName(language) << '\n';
+            ++failed;
+        }
+    }
 
     std::cout << failed << " Unicode highlighting checks failed\n";
     return failed ? 1 : 0;
