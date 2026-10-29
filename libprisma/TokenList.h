@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 struct TokenListNode
 {
@@ -41,6 +42,7 @@ typedef TokenListNode* TokenListPtr;
 class TokenList
 {
 public:
+    TokenList();
     TokenList(std::string_view text);
     ~TokenList();
 
@@ -75,6 +77,12 @@ public:
     private:
         pointer m_ptr;
     };
+
+    void swap(TokenList& other) noexcept
+    {
+        std::swap(head, other.head);
+        std::swap(length, other.length);
+    }
 
     ConstIterator begin() const { return ConstIterator(head->next); }
     ConstIterator end() const { return ConstIterator(head); }

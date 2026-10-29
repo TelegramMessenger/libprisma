@@ -11,3 +11,9 @@ key = value ; ini
 0x1F 0b1010 1.5e-3 'c' "str" :sym @attr $var %h &&x ||y
 	  tab   and trailing spaces
 #!/bin/sh
+--- a/Foo.cs	2024-01-01 00:00:00
++++ "b/\303\266.cs"
+@@ -1,4 +1,5 @@ class Foo {
+@@@ -1 -1 +1 @@@ int f(void)
+--- /dev/null
++++ b/sub.d/Makefile

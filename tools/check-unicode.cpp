@@ -74,6 +74,87 @@ bool CheckTokens(
     return false;
 }
 
+// CRLF line ends are read as LF ones are: the same tokens, each holding the same text but for
+// the carriage returns.
+bool CheckLineEnds(
+    SyntaxHighlighter& highlighter,
+    const std::string& language,
+    const std::string& text)
+{
+    auto crlf = std::string();
+    for (const char c : text)
+    {
+        if (c == '\n')
+        {
+            crlf += '\r';
+        }
+        crlf += c;
+    }
+
+    auto lf = Inspection();
+    Inspect(highlighter.tokenize(text, language), lf);
+    auto result = Inspection();
+    Inspect(highlighter.tokenize(crlf, language), result);
+
+    auto stripped = std::vector<Token>();
+    for (auto token : result.tokens)
+    {
+        std::erase(token.value, '\r');
+        if (!token.value.empty())
+        {
+            stripped.push_back(token);
+        }
+    }
+
+    if (result.text == crlf && stripped == lf.tokens)
+    {
+        return true;
+    }
+    std::cerr << "CRLF tokens differ from LF ones for " << language << ": " << text << '\n';
+    return false;
+}
+
+void CollectAliases(const TokenList& list, const std::string& type, std::vector<Token>& result)
+{
+    for (const auto& node : list)
+    {
+        if (!node.isSyntax())
+        {
+            continue;
+        }
+        const auto& syntax = static_cast<const Syntax&>(node);
+        if (syntax.type() == type && !syntax.alias().empty())
+        {
+            auto inspection = Inspection();
+            Inspect(syntax.children(), inspection);
+            result.push_back({ syntax.alias(), inspection.text });
+        }
+        CollectAliases(syntax.children(), type, result);
+    }
+}
+
+// The aliases of the tokens of `type`, each with the text it covers.
+bool CheckAliases(
+    SyntaxHighlighter& highlighter,
+    const std::string& language,
+    const std::string& text,
+    const std::string& type,
+    const std::vector<Token>& expected)
+{
+    auto result = std::vector<Token>();
+    CollectAliases(highlighter.tokenize(text, language), type, result);
+    if (result == expected)
+    {
+        return true;
+    }
+    std::cerr << "Unexpected aliases of " << type << " for " << language << ": " << text << '\n';
+    for (const auto& token : result)
+    {
+        std::cerr << "  " << token.type << ": " << token.value << '\n';
+    }
+    return false;
+}
+
 bool CheckPattern(
     const std::string& pattern,
     const std::string& text,
@@ -176,6 +257,71 @@ int main(int argc, char** argv)
         {
             { "keyword", "print" },
             { "number", "42" },
+        });
+
+    const auto diff = std::string(
+        "--- a/Foo.cs\n"
+        "+++ b/Foo.cs\n"
+        "@@ -1,4 +1,4 @@ class Foo\n"
+        " /* one\n"
+        "    two */\n"
+        "-int x;\n"
+        "+int y;\n");
+    // A language after "diff-" that is none leaves the diff as it is on its own.
+    for (const auto& language : { "diff", "diff-vue" })
+    {
+        failed += !CheckTokens(
+            highlighter,
+            language,
+            diff,
+            {
+                { "coord", "--- a/Foo.cs" },
+                { "coord", "+++ b/Foo.cs" },
+                { "coord", "@@ -1,4 +1,4 @@ " },
+                { "embedded-language", "class Foo" },
+                { "prefix", " " },
+                { "embedded-language", "/* one\n" },
+                { "prefix", " " },
+                { "embedded-language", "   two */\n" },
+                { "prefix", "-" },
+                { "line", "int x;\n" },
+                { "prefix", "+" },
+                { "line", "int y;\n" },
+            });
+    }
+    failed += !CheckTokens(
+        highlighter,
+        "diff-cs",
+        diff,
+        {
+            { "coord", "--- a/Foo.cs" },
+            { "coord", "+++ b/Foo.cs" },
+            { "coord", "@@ -1,4 +1,4 @@ " },
+            { "keyword", "class" },
+            { "embedded-language", " " },
+            { "class-name", "Foo" },
+            { "prefix", " " },
+            { "comment", "/* one\n" },
+            { "prefix", " " },
+            { "comment", "   two */" },
+            { "embedded-language", "\n" },
+            { "prefix", "-" },
+            { "line", "int x;\n" },
+            { "prefix", "+" },
+            { "line", "int y;\n" },
+        });
+
+    failed += !CheckLineEnds(highlighter, "diff-cs", diff);
+
+    // The files are coloured as their lines.
+    failed += !CheckAliases(
+        highlighter,
+        "diff",
+        diff,
+        "coord",
+        {
+            { "deleted", "--- a/Foo.cs" },
+            { "inserted", "+++ b/Foo.cs" },
         });
 
     std::cout << failed << " Unicode highlighting checks failed\n";

@@ -40,6 +40,7 @@ public:
 
 private:
     TokenList tokenize(std::string_view text, const Grammar* grammar);
+    void highlightEmbedded(TokenList& tokenList, size_t pos, std::string_view text, const Grammar* embedded);
     void matchGrammar(std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch);
 
     std::shared_ptr<LanguageTree> m_tree;

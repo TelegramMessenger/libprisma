@@ -300,6 +300,9 @@ async function generate() {
     loadLocalLanguage('./components/prism-tact.js', 'tact', 'Tact', 'tact')
     loadLocalLanguage('./components/prism-tolk.js', 'tolk', 'Tolk', 'tolk')
 
+    // Changes to Prism's own grammars
+    include(fs.readFileSync('./components/prism-diff-embedded.js'))
+
     Object.keys(Prism.languages).forEach(lng => {
         if (unsupported.includes(lng) || !components.languages[lng]) {
             return

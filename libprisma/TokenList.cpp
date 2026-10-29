@@ -1,5 +1,13 @@
 #include "TokenList.h"
 
+TokenList::TokenList()
+    : head(new TokenListNode())
+    , length(0)
+{
+    head->next = head;
+    head->prev = head;
+}
+
 TokenList::TokenList(std::string_view value)
     : head(new TokenListNode())
     , length(1)
