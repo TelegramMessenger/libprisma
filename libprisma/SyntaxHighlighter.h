@@ -1,5 +1,6 @@
 #pragma once
 #include <sstream>
+#include <chrono>
 
 #include "TokenList.h"
 #include <vector>
@@ -55,4 +56,5 @@ private:
 
     std::shared_ptr<LanguageTree> m_tree;
     int m_depth = 0;
+    std::chrono::steady_clock::time_point m_deadline;
 };
