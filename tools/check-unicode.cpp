@@ -470,6 +470,16 @@ int main(int argc, char** argv)
             { "embedded-language", "\n" },
         });
 
+    // A greedy search starting after the string is not at the start of a line, so the
+    // "^[ \t]*name" form of a mel function cannot match there.
+    failed += !CheckTokens(
+        highlighter,
+        "mel",
+        "\"a\" b",
+        {
+            { "string", "\"a\"" },
+        });
+
     // A file extension that is no language name reads as itself, as an unknown name does.
     for (const auto& [language, name] : std::vector<std::pair<std::string, std::string>>{
         { "rs", "rs" },

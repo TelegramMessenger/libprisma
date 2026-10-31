@@ -70,6 +70,12 @@ public:
         boost::cmatch m;
 
         auto flags = boost::regex_constants::match_not_dot_newline;
+        if (pos > 0)
+        {
+            // A search from JavaScript's lastIndex sees the text before it: ^ does not match
+            // there, and \b and lookbehinds read the character before.
+            flags |= boost::regex_constants::match_prev_avail;
+        }
         auto match = boost::regex_search(text.data() + pos, text.data() + text.size(), m, m_regex, flags);
         if (match)
         {
