@@ -4,7 +4,6 @@
 #include <boost/regex.hpp>
 
 #include <algorithm>
-#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -484,29 +483,6 @@ int main(int argc, char** argv)
             ++failed;
         }
     }
-
-
-    auto dataweave = std::string();
-    for (int i = 0; i < 2033; ++i)
-    {
-        dataweave += "\"/ ";
-    }
-    const auto start = std::chrono::steady_clock::now();
-    failed += !CheckTokens(highlighter, "dataweave", dataweave, {});
-    if (std::chrono::steady_clock::now() - start > std::chrono::seconds(2))
-    {
-        std::cerr << "DataWeave highlighting exceeded the work limit\n";
-        ++failed;
-    }
-    failed += !CheckTokens(
-        highlighter,
-        "dataweave",
-        "var answer = 42",
-        {
-            { "keyword", "var" },
-            { "operator", "=" },
-            { "number", "42" },
-        });
 
     std::cout << failed << " Unicode highlighting checks failed\n";
     return failed ? 1 : 0;

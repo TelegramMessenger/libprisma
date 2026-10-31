@@ -4,21 +4,6 @@
 
 #include <algorithm>
 
-namespace
-{
-    constexpr int kMaxDepth = 32;
-    constexpr auto kHighlightTimeout = std::chrono::milliseconds(100);
-
-    struct HighlightLimit {};
-
-    struct DepthGuard
-    {
-        int& depth;
-        DepthGuard(int& depth) : depth(++depth) {}
-        ~DepthGuard() { --depth; }
-    };
-}
-
 SyntaxHighlighter::SyntaxHighlighter(const std::string& path)
 {
     m_tree = std::make_shared<LanguageTree>();
@@ -27,7 +12,6 @@ SyntaxHighlighter::SyntaxHighlighter(const std::string& path)
 
 TokenList SyntaxHighlighter::tokenize(const std::string& text, const std::string& language)
 {
-    m_deadline = std::chrono::steady_clock::now() + kHighlightTimeout;
     const Grammar* grammar = m_tree->find(language);
     const Grammar* fixed = nullptr;
 
@@ -281,17 +265,25 @@ std::vector<LanguageGroup> SyntaxHighlighter::languageGroups() const
 
 TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* grammar)
 {
+    // Grammars may include themselves through "inside" (for example
+    // brightscript directive-statement -> expression -> brightscript),
+    // which can recurse on the same text forever and overflow the stack.
+    constexpr auto kMaxDepth = 32;
     if (m_depth >= kMaxDepth)
     {
         return TokenList(text);
     }
-    DepthGuard guard(m_depth);
+    struct DepthGuard
+    {
+        int& depth;
+        DepthGuard(int& depth) : depth(++depth) {}
+        ~DepthGuard() { --depth; }
+    } guard(m_depth);
 
     TokenList tokenList(text);
     try {
         matchGrammar(text, tokenList, grammar, tokenList.head, 0, nullptr);
     } catch (...) {
-        return TokenList(text);
     }
 
     return tokenList;
@@ -299,12 +291,6 @@ TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* gram
 
 void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch)
 {
-    if (m_depth >= kMaxDepth)
-    {
-        throw HighlightLimit();
-    }
-    DepthGuard guard(m_depth);
-
     for (const auto& token : grammar->tokens)
     {
         int x = 0;
@@ -315,10 +301,6 @@ void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList
                 return;
             }
 
-            if (std::chrono::steady_clock::now() >= m_deadline)
-            {
-                throw HighlightLimit();
-            }
             const auto& pattern = *j->get();
             const auto& inside = pattern.inside();
             const bool greedy = pattern.greedy();
@@ -330,10 +312,6 @@ void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList
                 currentNode != tokenList.head;
                 pos += currentNode->length(), currentNode = currentNode->next)
             {
-                if (std::chrono::steady_clock::now() >= m_deadline)
-                {
-                    throw HighlightLimit();
-                }
                 if (rematch && pos >= rematch->reach)
                 {
                     break;
