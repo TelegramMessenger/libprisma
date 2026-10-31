@@ -65,7 +65,9 @@ public:
     {
     }
 
-    std::string_view match(bool& success, size_t& pos, std::string_view text) const
+    // The first match from pos on, as where it starts, its length and how much of it Prism's
+    // lookbehind group took.
+    bool search(size_t pos, std::string_view text, size_t& start, size_t& length, size_t& lookbehindLength) const
     {
         boost::cmatch m;
 
@@ -76,25 +78,29 @@ public:
             // there, and \b and lookbehinds read the character before.
             flags |= boost::regex_constants::match_prev_avail;
         }
-        auto match = boost::regex_search(text.data() + pos, text.data() + text.size(), m, m_regex, flags);
-        if (match)
+        if (!boost::regex_search(text.data() + pos, text.data() + text.size(), m, m_regex, flags))
         {
-            success = true;
-            pos += m.position();
-
-            if (m_lookbehind && m[1].matched)
-            {
-                // change the match to remove the text matched by the Prism lookbehind group
-                auto lookbehindLength = m[1].length();
-                pos += lookbehindLength;
-
-                return text.substr(pos, m[0].length() - lookbehindLength);
-            }
-
-            return text.substr(pos, m[0].length());
+            return false;
         }
 
-        return {};
+        start = pos + m.position();
+        length = m[0].length();
+        lookbehindLength = m_lookbehind && m[1].matched ? m[1].length() : 0;
+        return true;
+    }
+
+    std::string_view match(bool& success, size_t& pos, std::string_view text) const
+    {
+        size_t start, length, lookbehindLength;
+        success = search(pos, text, start, length, lookbehindLength);
+        if (!success)
+        {
+            return {};
+        }
+
+        // change the match to remove the text matched by the Prism lookbehind group
+        pos = start + lookbehindLength;
+        return text.substr(pos, length - lookbehindLength);
     }
 
     bool lookbehind() const

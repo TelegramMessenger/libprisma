@@ -281,13 +281,45 @@ TokenList SyntaxHighlighter::tokenize(State& state, std::string_view text, const
         ~DepthGuard() { --depth; }
     } guard(state.depth);
 
+    const size_t searchesFrom = state.searchesFrom;
+    state.searchesFrom = state.searches.size();
+
     TokenList tokenList(text);
     try {
         matchGrammar(state, text, tokenList, grammar, tokenList.head, 0, nullptr);
     } catch (...) {
     }
 
+    state.searches.resize(state.searchesFrom);
+    state.searchesFrom = searchesFrom;
+
     return tokenList;
+}
+
+std::string_view SyntaxHighlighter::matchGreedy(State& state, const Pattern& pattern, bool& success, size_t& pos, std::string_view text) const
+{
+    const auto end = state.searches.end();
+    auto search = std::find_if(state.searches.begin() + state.searchesFrom, end, [&](const GreedySearch& search) { return search.pattern == &pattern; });
+
+    if (search == end || pos < search->from || (search->found && pos > search->start))
+    {
+        if (search == end)
+        {
+            search = state.searches.insert(end, GreedySearch{ &pattern });
+        }
+
+        search->from = pos;
+        search->found = pattern.search(pos, text, search->start, search->length, search->lookbehind);
+    }
+
+    success = search->found;
+    if (!success)
+    {
+        return {};
+    }
+
+    pos = search->start + search->lookbehind;
+    return text.substr(pos, search->length - search->lookbehind);
 }
 
 void SyntaxHighlighter::matchGrammar(State& state, std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch) const
@@ -339,7 +371,7 @@ void SyntaxHighlighter::matchGrammar(State& state, std::string_view text, TokenL
 
                 if (greedy)
                 {
-                    match = pattern.match(matchSuccess, matchIndex, text);
+                    match = matchGreedy(state, pattern, matchSuccess, matchIndex, text);
                     if (!matchSuccess || matchIndex >= text.length())
                     {
                         break;

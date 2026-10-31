@@ -7,6 +7,7 @@
 #include <optional>
 
 class LanguageTree;
+class Pattern;
 struct Grammar;
 
 // A language and the other names it goes by. An alias with a display name of its own (html,
@@ -49,14 +50,34 @@ private:
         size_t start;
     };
 
+    // The last search of a greedy pattern over the text being tokenized. The text does not
+    // change and a search sees the text before its start, so one that found nothing from `from`
+    // finds nothing further on, and one that found a match at `start` finds it again from
+    // anywhere up to there.
+    struct GreedySearch
+    {
+        const Pattern* pattern;
+        size_t from = 0;
+        bool found = false;
+        size_t start = 0;
+        size_t length = 0;
+        size_t lookbehind = 0;
+    };
+
     // What one call to the public tokenize keeps while it runs. It lives on that call's stack,
     // never in the highlighter, which threads share.
     struct State
     {
         int depth = 0;
+
+        // Those of the text being tokenized are the ones from searchesFrom on. A nested
+        // tokenize, of another text, stacks its own above them and drops them when it returns.
+        std::vector<GreedySearch> searches;
+        size_t searchesFrom = 0;
     };
 
     TokenList tokenize(State& state, std::string_view text, const Grammar* grammar) const;
+    std::string_view matchGreedy(State& state, const Pattern& pattern, bool& success, size_t& pos, std::string_view text) const;
     void highlightEmbedded(State& state, TokenList& tokenList, size_t pos, std::string_view text, const Grammar* fixed, const Grammar*& named) const;
     void highlightParts(State& state, std::vector<EmbeddedPart>& parts, std::string& content, std::string_view text, const Grammar* language) const;
     void matchGrammar(State& state, std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch) const;
