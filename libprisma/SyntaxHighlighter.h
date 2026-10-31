@@ -69,6 +69,7 @@ private:
     struct State
     {
         int depth = 0;
+        size_t searchesLeft = 0;
 
         // Those of the text being tokenized are the ones from searchesFrom on. A nested
         // tokenize, of another text, stacks its own above them and drops them when it returns.

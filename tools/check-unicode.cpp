@@ -544,6 +544,32 @@ int main(int argc, char** argv)
         }
     }
 
+    // Every regex match here regroups all the quotes after it, so the rematching grows with the
+    // square of the text: it runs out of searches and still hands back the whole text.
+    {
+        auto dataweave = std::string();
+        for (int i = 0; i < 2033; ++i)
+        {
+            dataweave += "\"/ ";
+        }
+        auto result = Inspection();
+        Inspect(highlighter.tokenize(dataweave, "dataweave"), result);
+        if (result.text != dataweave)
+        {
+            std::cerr << "DataWeave tokens out of searches lost text\n";
+            ++failed;
+        }
+    }
+    failed += !CheckTokens(
+        highlighter,
+        "dataweave",
+        "var answer = 42",
+        {
+            { "keyword", "var" },
+            { "operator", "=" },
+            { "number", "42" },
+        });
+
     failed += !CheckThreads(grammars, highlighter);
 
     std::cout << failed << " Unicode highlighting checks failed\n";

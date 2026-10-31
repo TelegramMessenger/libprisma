@@ -54,8 +54,15 @@ TokenList SyntaxHighlighter::tokenize(const std::string& text, const std::string
         return TokenList(text);
     }
 
+    // Code takes under 8 regex searches a byte in every language measured. A text that makes the
+    // rematching superlinear runs out instead, at the same point on every device, and keeps
+    // the tokens found until then.
+    constexpr size_t kSearchesPerByte = 64;
+    constexpr size_t kSearchesAtLeast = 1024;
+
     const Grammar* named = nullptr;
     State state;
+    state.searchesLeft = kSearchesPerByte * text.size() + kSearchesAtLeast;
     TokenList tokenList = tokenize(state, text, grammar);
     highlightEmbedded(state, tokenList, 0, text, fixed, named);
     return tokenList;
@@ -308,6 +315,7 @@ std::string_view SyntaxHighlighter::matchGreedy(State& state, const Pattern& pat
             search = state.searches.insert(end, GreedySearch{ &pattern });
         }
 
+        --state.searchesLeft;
         search->from = pos;
         search->found = pattern.search(pos, text, search->start, search->length, search->lookbehind);
     }
@@ -348,6 +356,12 @@ void SyntaxHighlighter::matchGrammar(State& state, std::string_view text, TokenL
                 if (rematch && pos >= rematch->reach)
                 {
                     break;
+                }
+
+                // Out of searches. It stops here, where no edit to the list is half done.
+                if (state.searchesLeft == 0)
+                {
+                    return;
                 }
 
                 if (tokenList.length > text.length())
@@ -414,6 +428,7 @@ void SyntaxHighlighter::matchGrammar(State& state, std::string_view text, TokenL
                 }
                 else
                 {
+                    --state.searchesLeft;
                     matchIndex = 0;
                     match = pattern.match(matchSuccess, matchIndex, str);
                     if (!matchSuccess)
