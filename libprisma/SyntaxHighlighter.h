@@ -30,7 +30,8 @@ class SyntaxHighlighter
 public:
     SyntaxHighlighter(const std::string& languages);
 
-    TokenList tokenize(const std::string& text, const std::string& language);
+    // Safe to call from several threads at once.
+    TokenList tokenize(const std::string& text, const std::string& language) const;
 
     std::map<std::string, std::string> languages() const;
 
@@ -48,11 +49,17 @@ private:
         size_t start;
     };
 
-    TokenList tokenize(std::string_view text, const Grammar* grammar);
-    void highlightEmbedded(TokenList& tokenList, size_t pos, std::string_view text, const Grammar* fixed, const Grammar*& named);
-    void highlightParts(std::vector<EmbeddedPart>& parts, std::string& content, std::string_view text, const Grammar* language);
-    void matchGrammar(std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch);
+    // What one call to the public tokenize keeps while it runs. It lives on that call's stack,
+    // never in the highlighter, which threads share.
+    struct State
+    {
+        int depth = 0;
+    };
+
+    TokenList tokenize(State& state, std::string_view text, const Grammar* grammar) const;
+    void highlightEmbedded(State& state, TokenList& tokenList, size_t pos, std::string_view text, const Grammar* fixed, const Grammar*& named) const;
+    void highlightParts(State& state, std::vector<EmbeddedPart>& parts, std::string& content, std::string_view text, const Grammar* language) const;
+    void matchGrammar(State& state, std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch) const;
 
     std::shared_ptr<LanguageTree> m_tree;
-    int m_depth = 0;
 };

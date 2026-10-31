@@ -4,10 +4,12 @@
 #include <boost/regex.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -191,6 +193,54 @@ bool CheckPattern(
     }
     std::cerr << "Unexpected match for " << pattern << ": " << text << '\n';
     return false;
+}
+
+// Every language tokenized on several threads at once by one highlighter, fresh so that its
+// patterns compile while they race, must come out as `reference` tokenizes it alone.
+bool CheckThreads(const std::string& grammars, const SyntaxHighlighter& reference)
+{
+    const auto text = std::string(
+        "int main() { return \"x\" + 'y' + 0x1F; } /* a */ // b\n"
+        "<a href=\"c\">$d @e #f</a>\n");
+
+    std::vector<std::string> languages;
+    std::vector<std::vector<Token>> expected;
+    for (const auto& [language, name] : reference.languages())
+    {
+        auto result = Inspection();
+        Inspect(reference.tokenize(text, language), result);
+        languages.push_back(language);
+        expected.push_back(std::move(result.tokens));
+    }
+
+    const auto shared = SyntaxHighlighter(grammars);
+    std::atomic<size_t> wrong = 0;
+    std::vector<std::thread> threads;
+    for (size_t thread = 0; thread < 8; ++thread)
+    {
+        threads.emplace_back([&, thread] {
+            for (size_t k = 0; k < languages.size(); ++k)
+            {
+                const auto i = (k + thread * languages.size() / 8) % languages.size();
+                auto result = Inspection();
+                Inspect(shared.tokenize(text, languages[i]), result);
+                if (result.text != text || result.tokens != expected[i])
+                {
+                    ++wrong;
+                }
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+
+    if (wrong)
+    {
+        std::cerr << wrong << " languages tokenized differently on several threads\n";
+    }
+    return !wrong;
 }
 
 }
@@ -493,6 +543,8 @@ int main(int argc, char** argv)
             ++failed;
         }
     }
+
+    failed += !CheckThreads(grammars, highlighter);
 
     std::cout << failed << " Unicode highlighting checks failed\n";
     return failed ? 1 : 0;

@@ -1,7 +1,9 @@
 #pragma once
 
+#include <atomic>
 #include <sstream>
 #include <fstream>
+#include <mutex>
 #include <optional>
 
 #include "Highlight.h"
@@ -82,6 +84,10 @@ private:
     std::map<std::string, std::pair<std::string, size_t>> m_languages;
     std::vector<std::string> m_order;
     std::vector<std::shared_ptr<Grammar>> m_grammars;
+    // Patterns compile on first use, which can be on any thread. A slot of m_patterns and
+    // m_patternsRaw is only touched under m_resolveLock; m_resolved is read without it.
     std::vector<std::shared_ptr<Pattern>> m_patterns;
     std::vector<std::shared_ptr<PatternRaw>> m_patternsRaw;
+    std::vector<std::atomic<const Pattern*>> m_resolved;
+    std::mutex m_resolveLock;
 };

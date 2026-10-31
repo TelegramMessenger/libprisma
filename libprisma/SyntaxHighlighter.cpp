@@ -10,7 +10,7 @@ SyntaxHighlighter::SyntaxHighlighter(const std::string& path)
     m_tree->load(path);
 }
 
-TokenList SyntaxHighlighter::tokenize(const std::string& text, const std::string& language)
+TokenList SyntaxHighlighter::tokenize(const std::string& text, const std::string& language) const
 {
     const Grammar* grammar = m_tree->find(language);
     const Grammar* fixed = nullptr;
@@ -55,8 +55,9 @@ TokenList SyntaxHighlighter::tokenize(const std::string& text, const std::string
     }
 
     const Grammar* named = nullptr;
-    TokenList tokenList = tokenize(text, grammar);
-    highlightEmbedded(tokenList, 0, text, fixed, named);
+    State state;
+    TokenList tokenList = tokenize(state, text, grammar);
+    highlightEmbedded(state, tokenList, 0, text, fixed, named);
     return tokenList;
 }
 
@@ -135,7 +136,7 @@ namespace
 // `fixed` is the language the caller named, which wins over any the text names. Otherwise an
 // embedded-language-name token, as a diff's file name, sets `named` for the parts after it, in
 // whichever parent they are.
-void SyntaxHighlighter::highlightEmbedded(TokenList& tokenList, size_t pos, std::string_view text, const Grammar* fixed, const Grammar*& named)
+void SyntaxHighlighter::highlightEmbedded(State& state, TokenList& tokenList, size_t pos, std::string_view text, const Grammar* fixed, const Grammar*& named) const
 {
     std::string content;
     std::vector<EmbeddedPart> parts;
@@ -169,14 +170,14 @@ void SyntaxHighlighter::highlightEmbedded(TokenList& tokenList, size_t pos, std:
             }
 
             // One inside it names the language more closely, as a path's extension does.
-            highlightEmbedded(syntax.m_children, pos, text, fixed, named);
+            highlightEmbedded(state, syntax.m_children, pos, text, fixed, named);
         }
         else if (syntax.type() == kEmbeddedLanguage)
         {
             const Grammar* grammar = fixed ? fixed : named;
             if (grammar != language)
             {
-                highlightParts(parts, content, text, language);
+                highlightParts(state, parts, content, text, language);
                 language = grammar;
             }
 
@@ -188,14 +189,14 @@ void SyntaxHighlighter::highlightEmbedded(TokenList& tokenList, size_t pos, std:
         }
         else
         {
-            highlightEmbedded(syntax.m_children, pos, text, fixed, named);
+            highlightEmbedded(state, syntax.m_children, pos, text, fixed, named);
         }
     }
 
-    highlightParts(parts, content, text, language);
+    highlightParts(state, parts, content, text, language);
 }
 
-void SyntaxHighlighter::highlightParts(std::vector<EmbeddedPart>& parts, std::string& content, std::string_view text, const Grammar* language)
+void SyntaxHighlighter::highlightParts(State& state, std::vector<EmbeddedPart>& parts, std::string& content, std::string_view text, const Grammar* language) const
 {
     if (parts.empty())
     {
@@ -204,7 +205,7 @@ void SyntaxHighlighter::highlightParts(std::vector<EmbeddedPart>& parts, std::st
 
     // Its views are into `content`, which is cleared below: the parts are rebuilt from it as
     // views into `text`.
-    TokenList highlighted = tokenize(std::string_view(content), language);
+    TokenList highlighted = tokenize(state, std::string_view(content), language);
     std::vector<SliceCursor> cursors;
 
     for (const auto& part : parts)
@@ -263,13 +264,13 @@ std::vector<LanguageGroup> SyntaxHighlighter::languageGroups() const
     return groups;
 }
 
-TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* grammar)
+TokenList SyntaxHighlighter::tokenize(State& state, std::string_view text, const Grammar* grammar) const
 {
     // Grammars may include themselves through "inside" (for example
     // brightscript directive-statement -> expression -> brightscript),
     // which can recurse on the same text forever and overflow the stack.
     constexpr auto kMaxDepth = 32;
-    if (m_depth >= kMaxDepth)
+    if (state.depth >= kMaxDepth)
     {
         return TokenList(text);
     }
@@ -278,18 +279,18 @@ TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* gram
         int& depth;
         DepthGuard(int& depth) : depth(++depth) {}
         ~DepthGuard() { --depth; }
-    } guard(m_depth);
+    } guard(state.depth);
 
     TokenList tokenList(text);
     try {
-        matchGrammar(text, tokenList, grammar, tokenList.head, 0, nullptr);
+        matchGrammar(state, text, tokenList, grammar, tokenList.head, 0, nullptr);
     } catch (...) {
     }
 
     return tokenList;
 }
 
-void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch)
+void SyntaxHighlighter::matchGrammar(State& state, std::string_view text, TokenList& tokenList, const Grammar* grammar, TokenListPtr startNode, size_t startPos, RematchOptions* rematch) const
 {
     for (const auto& token : grammar->tokens)
     {
@@ -412,7 +413,7 @@ void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList
                 TokenList tokenEntries = [&]() {
                     if (inside)
                     {
-                        return tokenize(match, inside);
+                        return tokenize(state, match, inside);
                     }
                     else
                     {
@@ -440,7 +441,7 @@ void SyntaxHighlighter::matchGrammar(std::string_view text, TokenList& tokenList
                         .j = x
                     };
 
-                    matchGrammar(text, tokenList, grammar, currentNode->prev, pos, &nestedRematch);
+                    matchGrammar(state, text, tokenList, grammar, currentNode->prev, pos, &nestedRematch);
 
                     // the reach might have been extended because of the rematching
                     if (rematch && nestedRematch.reach > rematch->reach)
