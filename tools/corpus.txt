@@ -17,3 +17,5 @@ key = value ; ini
 @@@ -1 -1 +1 @@@ int f(void)
 --- /dev/null
 +++ b/sub.d/Makefile
+f(/* a */ 1, /* b /* c */ */ 2) // "x" val s = "a // b ${x.map { it }} \$y" + """r"""" + .5f + 0xFFuL + 0..<n
+data class User(val open: Boolean) : Base<out T>(), Api { private set; get() = a to b; loop@ return@loop }

@@ -372,6 +372,7 @@ async function generate() {
 
     // Changes to Prism's own grammars
     include(fs.readFileSync('./components/prism-diff-embedded.js'))
+    include(fs.readFileSync('./components/prism-kotlin.js'))
 
     Object.keys(Prism.languages).forEach(lng => {
         if (unsupported.includes(lng) || !components.languages[lng]) {
