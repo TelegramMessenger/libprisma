@@ -7,7 +7,10 @@
 namespace
 {
     constexpr int kMaxDepth = 32;
-    constexpr auto kHighlightTimeout = std::chrono::milliseconds(100);
+#ifndef PRISMA_HIGHLIGHT_TIMEOUT_MS
+#define PRISMA_HIGHLIGHT_TIMEOUT_MS 100
+#endif
+    constexpr auto kHighlightTimeout = std::chrono::milliseconds(PRISMA_HIGHLIGHT_TIMEOUT_MS);
 
     struct HighlightLimit {};
 
@@ -283,7 +286,11 @@ TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* gram
 {
     if (m_depth >= kMaxDepth)
     {
+#ifdef PRISMA_PROPAGATE_HIGHLIGHT_FAILURE
+        throw HighlightLimit();
+#else
         return TokenList(text);
+#endif
     }
     DepthGuard guard(m_depth);
 
@@ -291,7 +298,11 @@ TokenList SyntaxHighlighter::tokenize(std::string_view text, const Grammar* gram
     try {
         matchGrammar(text, tokenList, grammar, tokenList.head, 0, nullptr);
     } catch (...) {
+#ifdef PRISMA_PROPAGATE_HIGHLIGHT_FAILURE
+        throw;
+#else
         return TokenList(text);
+#endif
     }
 
     return tokenList;
