@@ -53,29 +53,127 @@ namespace libprisma
         out += digits[byte & 0x0F];
     }
 
-    inline void appendUtf8(std::string& out, int codePoint)
+    // Writes the UTF-8 encoding of codePoint into bytes and returns the number of bytes used.
+    inline size_t encodeUtf8(int codePoint, unsigned char (&bytes)[4])
     {
         if (codePoint < 0x80)
         {
-            appendByte(out, static_cast<unsigned char>(codePoint));
+            bytes[0] = static_cast<unsigned char>(codePoint);
+            return 1;
         }
-        else if (codePoint < 0x800)
+        if (codePoint < 0x800)
         {
-            appendByte(out, static_cast<unsigned char>(0xC0 | (codePoint >> 6)));
-            appendByte(out, static_cast<unsigned char>(0x80 | (codePoint & 0x3F)));
+            bytes[0] = static_cast<unsigned char>(0xC0 | (codePoint >> 6));
+            bytes[1] = static_cast<unsigned char>(0x80 | (codePoint & 0x3F));
+            return 2;
         }
-        else if (codePoint < 0x10000)
+        if (codePoint < 0x10000)
         {
-            appendByte(out, static_cast<unsigned char>(0xE0 | (codePoint >> 12)));
-            appendByte(out, static_cast<unsigned char>(0x80 | ((codePoint >> 6) & 0x3F)));
-            appendByte(out, static_cast<unsigned char>(0x80 | (codePoint & 0x3F)));
+            bytes[0] = static_cast<unsigned char>(0xE0 | (codePoint >> 12));
+            bytes[1] = static_cast<unsigned char>(0x80 | ((codePoint >> 6) & 0x3F));
+            bytes[2] = static_cast<unsigned char>(0x80 | (codePoint & 0x3F));
+            return 3;
         }
-        else
+        bytes[0] = static_cast<unsigned char>(0xF0 | (codePoint >> 18));
+        bytes[1] = static_cast<unsigned char>(0x80 | ((codePoint >> 12) & 0x3F));
+        bytes[2] = static_cast<unsigned char>(0x80 | ((codePoint >> 6) & 0x3F));
+        bytes[3] = static_cast<unsigned char>(0x80 | (codePoint & 0x3F));
+        return 4;
+    }
+
+    inline void appendUtf8(std::string& out, int codePoint)
+    {
+        unsigned char bytes[4];
+        const size_t length = encodeUtf8(codePoint, bytes);
+        for (size_t i = 0; i < length; ++i)
         {
-            appendByte(out, static_cast<unsigned char>(0xF0 | (codePoint >> 18)));
-            appendByte(out, static_cast<unsigned char>(0x80 | ((codePoint >> 12) & 0x3F)));
-            appendByte(out, static_cast<unsigned char>(0x80 | ((codePoint >> 6) & 0x3F)));
-            appendByte(out, static_cast<unsigned char>(0x80 | (codePoint & 0x3F)));
+            appendByte(out, bytes[i]);
+        }
+    }
+
+    // Adds to alternatives the patterns that match the UTF-8 encoding of every code point from
+    // low to high. Each pattern is a sequence of byte ranges: for example, U+0400 to U+04FF
+    // becomes [\xD0-\xD3][\x80-\xBF].
+    //
+    // Not every range can be written as one such sequence, so it is split into pieces that
+    // can: first where the length of the encoding changes (at U+0080, U+0800 and U+10000),
+    // then wherever the continuation bytes would not cover their full range \x80-\xBF. This
+    // is the usual approach; Rust's regex-syntax, for example, does the same in Utf8Sequences.
+    inline void appendUtf8Range(std::vector<std::string>& alternatives, int low, int high)
+    {
+        for (const int last : { 0x7F, 0x7FF, 0xFFFF })
+        {
+            if (low <= last && high > last)
+            {
+                appendUtf8Range(alternatives, low, last);
+                appendUtf8Range(alternatives, last + 1, high);
+                return;
+            }
+        }
+
+        for (int i = 1; i < 4; ++i)
+        {
+            const int tail = (1 << (6 * i)) - 1;
+            if ((low & ~tail) == (high & ~tail))
+            {
+                continue;
+            }
+            if ((low & tail) != 0)
+            {
+                appendUtf8Range(alternatives, low, low | tail);
+                appendUtf8Range(alternatives, (low | tail) + 1, high);
+                return;
+            }
+            if ((high & tail) != tail)
+            {
+                appendUtf8Range(alternatives, low, (high & ~tail) - 1);
+                appendUtf8Range(alternatives, high & ~tail, high);
+                return;
+            }
+        }
+
+        unsigned char lows[4];
+        unsigned char highs[4];
+        const size_t length = encodeUtf8(low, lows);
+        encodeUtf8(high, highs);
+
+        std::string sequence;
+        for (size_t i = 0; i < length; ++i)
+        {
+            if (lows[i] == highs[i])
+            {
+                appendByte(sequence, lows[i]);
+                continue;
+            }
+            sequence += '[';
+            appendByte(sequence, lows[i]);
+            sequence += '-';
+            appendByte(sequence, highs[i]);
+            sequence += ']';
+        }
+        alternatives.push_back(std::move(sequence));
+    }
+
+    // Same as appendUtf8Range, but skips the surrogates U+D800 to U+DFFF: they have no UTF-8
+    // encoding, so no text can contain them.
+    inline void appendCodePoints(std::vector<std::string>& alternatives, int low, int high)
+    {
+        if (low < 0xD800 && high > 0xDFFF)
+        {
+            appendUtf8Range(alternatives, low, 0xD7FF);
+            appendUtf8Range(alternatives, 0xE000, high);
+        }
+        else if (high < 0xD800 || low > 0xDFFF)
+        {
+            appendUtf8Range(alternatives, low, high);
+        }
+        else if (low < 0xD800)
+        {
+            appendUtf8Range(alternatives, low, 0xD7FF);
+        }
+        else if (high > 0xDFFF)
+        {
+            appendUtf8Range(alternatives, 0xE000, high);
         }
     }
 
@@ -233,7 +331,7 @@ namespace libprisma
             return 0;
         }
 
-        std::vector<int> wide;
+        std::vector<std::string> alternatives;
         std::string narrow;
 
         for (const auto& member : characters.members)
@@ -244,50 +342,59 @@ namespace libprisma
             }
             else if (member.high < 0)
             {
-                wide.push_back(member.low);
+                appendCodePoints(alternatives, member.low, member.low);
             }
-            else if (!characters.negated)
+            else if (member.low >= 0 && member.low <= member.high)
             {
-                // a range of code points that is not the surrogate idiom; leave it be rather
-                // than expand what could be the whole of Unicode
+                appendCodePoints(alternatives, member.low, member.high);
+            }
+            else
+            {
+                // A range whose end is above ASCII but whose start is not a \u escape. This
+                // code does not convert such ranges, so leave the whole class unchanged.
                 return 0;
             }
         }
 
-        if (wide.empty())
-        {
-            out += '[';
-            if (characters.negated)
-            {
-                out += '^';
-            }
-            out += narrow;
-            out += ']';
-            return characters.end - begin;
-        }
-
-        // Exclude whole UTF-8 sequences without rejecting bytes shared by other characters.
-        out += characters.negated ? "(?:(?!" : "(?:";
         if (!narrow.empty())
         {
-            out += '[';
+            std::string members = "[";
             if (narrow.front() == '^')
             {
-                out += '\\';
+                members += '\\';
             }
-            out += narrow;
-            out += ']';
-            out += '|';
+            members += narrow;
+            members += ']';
+            alternatives.insert(alternatives.begin(), std::move(members));
         }
-        for (size_t i = 0; i < wide.size(); ++i)
+
+        std::string any;
+        for (size_t i = 0; i < alternatives.size(); ++i)
         {
             if (i > 0)
             {
-                out += '|';
+                any += '|';
             }
-            appendUtf8(out, wide[i]);
+            any += alternatives[i];
         }
-        out += characters.negated ? ")[\\s\\S])" : ")";
+
+        if (characters.negated)
+        {
+            // Match one whole UTF-8 character that is not in the class. The lookahead rejects
+            // the excluded characters; then the whole character is consumed, not just its first
+            // byte. Consuming a single byte would let the class match the last byte of an
+            // excluded character, or start matching in the middle of one.
+            out += "(?:";
+            if (!any.empty())
+            {
+                out += "(?!" + any + ")";
+            }
+            out += "[\\x00-\\x7F\\xC0-\\xFF][\\x80-\\xBF]{0,3})";
+        }
+        else
+        {
+            out += any.empty() ? "(?!)" : "(?:" + any + ")";
+        }
 
         return characters.end - begin;
     }

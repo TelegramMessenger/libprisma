@@ -184,14 +184,21 @@ bool CheckPattern(
     const std::string& text,
     bool expected)
 {
-    const auto regex = boost::regex(
-        libprisma::widenUnicodeClasses(pattern),
-        boost::regex_constants::ECMAScript | boost::regex_constants::no_mod_m);
-    if (boost::regex_match(text, regex) == expected)
+    try
     {
-        return true;
+        const auto regex = boost::regex(
+            libprisma::widenUnicodeClasses(pattern),
+            boost::regex_constants::ECMAScript | boost::regex_constants::no_mod_m);
+        if (boost::regex_match(text, regex) == expected)
+        {
+            return true;
+        }
+        std::cerr << "Unexpected match for " << pattern << ": " << text << '\n';
     }
-    std::cerr << "Unexpected match for " << pattern << ": " << text << '\n';
+    catch (const std::exception& e)
+    {
+        std::cerr << "Boost will not take " << pattern << ": " << e.what() << '\n';
+    }
     return false;
 }
 
@@ -312,6 +319,26 @@ int main(int argc, char** argv)
     failed += !CheckPattern(R"([^^\u2019]+)", "abc", true);
     failed += !CheckPattern(R"([\u201c\u201d]+)", "\u201c\u201d", true);
     failed += !CheckPattern(R"([\uD800-\uDBFF][\uDC00-\uDFFF])", "\U0001F600", true);
+
+    // A range of code points inside a class must match whole UTF-8 characters, whatever the
+    // length of their encoding, and a negated class must consume one whole character, not one
+    // byte. These patterns are plain string literals: "\\u0400" is the escape a pattern holds.
+    failed += !CheckPattern("[\\u0400-\\u04ff]+", "\U0000041F\U00000440\U00000438\U00000432\U00000435\U00000442", true);
+    failed += !CheckPattern("[\\u0400-\\u04ff]+", "Hi", false);
+    failed += !CheckPattern("[\\w\\u0400-\\u0484\\u0487-\\u052f]+", "a_1\U00000401\U00000436\U00000487\U0000052F", true);
+    failed += !CheckPattern("[\\w\\u0400-\\u0484\\u0487-\\u052f]", "\U00000485", false);
+    failed += !CheckPattern("[\\w\\u0400-\\u0484\\u0487-\\u052f]", "\U00000530", false);
+    failed += !CheckPattern("[\\u0061-\\u0800]+", "az\U000000E9\U000007FF\U00000800", true);
+    failed += !CheckPattern("[\\u0061-\\u0800]", "`", false);
+    failed += !CheckPattern("[\\u0061-\\u0800]", "\U00000801", false);
+    failed += !CheckPattern("[\\ua640-\\ua69f\\ufe2e]{2}", "\U0000A640\U0000FE2E", true);
+    failed += !CheckPattern("[\\ud7ff-\\ue000]+", "\U0000D7FF\U0000E000", true);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", "\U00000416", false);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", "_", false);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", " ", true);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", "\U00002014", true);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]{2}", "\U00002014\U0001F600", true);
+    failed += !CheckPattern("[^\\u2019]", "\U00002014", true);
 
     const auto text = std::string("#iFclude <a>");
     const auto tokens = highlighter.tokenize(text, "brightscript");
