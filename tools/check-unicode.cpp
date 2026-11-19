@@ -557,8 +557,45 @@ int main(int argc, char** argv)
             { "string", "\"a\"" },
         });
 
+    // BSL keywords can be Cyrillic or Latin, in any letter case. A keyword must be a whole word:
+    // in "ПеременнаяЕсли" the trailing "Если" is part of a name, not a keyword.
+    failed += !CheckTokens(
+        highlighter,
+        "bsl",
+        "Процедура Тест() Экспорт\n"
+        "\tЕСЛИ НЕ а Тогда КонецЕсли;\n"
+        "\tПеременнаяЕсли = 1;\n"
+        "КонецПроцедуры",
+        {
+            { "keyword", "Процедура" },
+            { "punctuation", "(" },
+            { "punctuation", ")" },
+            { "keyword", "Экспорт" },
+            { "keyword", "ЕСЛИ" },
+            { "operator", "НЕ" },
+            { "keyword", "Тогда" },
+            { "keyword", "КонецЕсли" },
+            { "punctuation", ";" },
+            { "operator", "=" },
+            { "number", "1" },
+            { "punctuation", ";" },
+            { "keyword", "КонецПроцедуры" },
+        });
+    failed += !CheckTokens(
+        highlighter,
+        "oscript",
+        "Сообщить(\"Привет\");",
+        {
+            { "punctuation", "(" },
+            { "string", "\"Привет\"" },
+            { "punctuation", ")" },
+            { "punctuation", ";" },
+        });
+
     // A file extension that is no language name reads as itself, as an unknown name does.
     for (const auto& [language, name] : std::vector<std::pair<std::string, std::string>>{
+        { "bsl", "BSL (1C:Enterprise)" },
+        { "oscript", "OneScript" },
         { "rs", "rs" },
         { "rust", "Rust" },
         { "nope", "nope" },

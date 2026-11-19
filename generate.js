@@ -125,6 +125,62 @@ function escapeNonAscii(pattern) {
     return result
 }
 
+// The i flag makes a pattern case-insensitive only for ASCII letters in the engines that read
+// grammars.dat: Boost compares bytes, and java.util.regex ignores the case of other letters
+// unless UNICODE_CASE is set. So /если/i would not match "Если".
+//
+// To fix that, every non-ASCII letter in a pattern with the i flag is replaced by a character
+// class holding its lower and upper case: /если/i becomes /[еЕ][сС][лЛ][иИ]/i. Both engines
+// match that as intended. BSL needs this for its Cyrillic keywords.
+function foldCase(pattern) {
+    const flags = pattern.slice(pattern.lastIndexOf('/') + 1)
+    if (!flags.includes('i') || !/[^\x00-\x7F]/.test(pattern)) {
+        return pattern
+    }
+
+    const cases = c => {
+        const lower = c.toLowerCase()
+        const upper = c.toUpperCase()
+        return c > '\x7F' && lower !== upper && lower.length === 1 && upper.length === 1
+            ? lower + upper
+            : null
+    }
+
+    let result = ''
+    let inClass = false
+
+    for (let i = 0; i < pattern.length; i++) {
+        const c = pattern[i]
+
+        if (c === '\\') {
+            result += pattern.substr(i, 2)
+            i++
+            continue
+        }
+
+        if (inClass) {
+            // A letter inside a class, such as [а-я], would need its other case added to the
+            // class as well. No grammar has one yet, so stop rather than emit a pattern that
+            // silently stays case-sensitive.
+            if (cases(c)) {
+                throw new Error(`foldCase does not handle the letter ${c} inside a character class: ${pattern}`)
+            }
+            if (c === ']') {
+                inClass = false
+            }
+        } else if (c === '[') {
+            inClass = true
+        } else if (cases(c)) {
+            result += '[' + cases(c) + ']'
+            continue
+        }
+
+        result += c
+    }
+
+    return result
+}
+
 function unique(a, fn) {
     if (a.length === 0 || a.length === 1) {
         return a;
@@ -280,7 +336,7 @@ async function generate() {
             pattern = pattern.replaceAll("|[])", ")");
             pattern = pattern.replaceAll(":[]", ":");
 
-            return escapeNonAscii(normalizeEscapes(pattern))
+            return escapeNonAscii(foldCase(normalizeEscapes(pattern)))
         }
 
         for (var token in copy) {
@@ -347,7 +403,6 @@ async function generate() {
     }
 
     var unsupported = [
-        "bsl",
         "coq",
         "gherkin",
         "jexl",
