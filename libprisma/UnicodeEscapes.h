@@ -380,16 +380,14 @@ namespace libprisma
 
         if (characters.negated)
         {
-            // Match one whole UTF-8 character that is not in the class. The lookahead rejects
-            // the excluded characters; then the whole character is consumed, not just its first
-            // byte. Consuming a single byte would let the class match the last byte of an
-            // excluded character, or start matching in the middle of one.
+            // One whole UTF-8 character that the lookahead does not exclude. Each branch has a
+            // fixed length, so backtracking cannot give up part of the character.
             out += "(?:";
             if (!any.empty())
             {
                 out += "(?!" + any + ")";
             }
-            out += "[\\x00-\\x7F\\xC0-\\xFF][\\x80-\\xBF]{0,3})";
+            out += "(?:[\\x00-\\x7F]|[\\xC0-\\xDF][\\x80-\\xBF]|[\\xE0-\\xEF][\\x80-\\xBF]{2}|[\\xF0-\\xF7][\\x80-\\xBF]{3}))";
         }
         else
         {

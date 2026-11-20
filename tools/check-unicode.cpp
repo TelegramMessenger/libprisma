@@ -339,6 +339,10 @@ int main(int argc, char** argv)
     failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", "\U00002014", true);
     failed += !CheckPattern("[^\\w\\u0400-\\u04ff]{2}", "\U00002014\U0001F600", true);
     failed += !CheckPattern("[^\\u2019]", "\U00002014", true);
+    // What follows a negated class cannot match the rest of the character the class took.
+    failed += !CheckPattern("[^\\u2019][\\s\\S]", "\U00000416", false);
+    failed += !CheckPattern("[^\\u2019][\\s\\S]", "\U0001F600", false);
+    failed += !CheckPattern("[^\\u2019][\\s\\S]", "\U00000416a", true);
 
     const auto text = std::string("#iFclude <a>");
     const auto tokens = highlighter.tokenize(text, "brightscript");
