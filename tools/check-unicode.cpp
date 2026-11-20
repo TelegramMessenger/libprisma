@@ -596,6 +596,23 @@ int main(int argc, char** argv)
             { "punctuation", ";" },
         });
 
+    // A letter in a case-insensitive pattern matches what JavaScript's /i matches: every
+    // character with the same upper case. OpenQASM's "µs" is micro sign, Greek mu or capital Mu.
+    for (const auto& micro : { "\U000000B5", "\U000003BC", "\U0000039C" })
+    {
+        failed += !CheckTokens(
+            highlighter,
+            "openqasm",
+            std::string("delay[5") + micro + "s] q;",
+            {
+                { "keyword", "delay" },
+                { "punctuation", "[" },
+                { "number", std::string("5") + micro + "s" },
+                { "punctuation", "]" },
+                { "punctuation", ";" },
+            });
+    }
+
     // A file extension that is no language name reads as itself, as an unknown name does.
     for (const auto& [language, name] : std::vector<std::pair<std::string, std::string>>{
         { "bsl", "BSL (1C:Enterprise)" },

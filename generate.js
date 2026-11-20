@@ -125,26 +125,42 @@ function escapeNonAscii(pattern) {
     return result
 }
 
-// The i flag makes a pattern case-insensitive only for ASCII letters in the engines that read
-// grammars.dat: Boost compares bytes, and java.util.regex ignores the case of other letters
-// unless UNICODE_CASE is set. So /если/i would not match "Если".
-//
-// To fix that, every non-ASCII letter in a pattern with the i flag is replaced by a character
-// class holding its lower and upper case: /если/i becomes /[еЕ][сС][лЛ][иИ]/i. Both engines
-// match that as intended. BSL needs this for its Cyrillic keywords.
+// What JavaScript's /i compares a character as, without the u flag (ECMAScript's
+// Canonicalize): its upper case, unless that is more than one character, or is ASCII while
+// the character is not. So /ſ/i matches only ſ, though "ſ".toUpperCase() is "S".
+function canonicalize(c) {
+    const upper = c.toUpperCase()
+    if (upper.length !== 1) {
+        return c
+    }
+    return c.charCodeAt(0) >= 0x80 && upper.charCodeAt(0) < 0x80 ? c : upper
+}
+
+// every UTF-16 code unit, grouped by what /i compares it as
+let caseGroups = null
+
+function sameCase(c) {
+    if (!caseGroups) {
+        caseGroups = new Map()
+        for (let i = 0; i < 0x10000; i++) {
+            const x = String.fromCharCode(i)
+            const key = canonicalize(x)
+            caseGroups.set(key, (caseGroups.get(key) || '') + x)
+        }
+    }
+    return caseGroups.get(canonicalize(c))
+}
+
+// Boost compares bytes, and java.util.regex folds only ASCII without UNICODE_CASE, so /и/i
+// would not match "И". Each non-ASCII letter of a case-insensitive pattern is spelled out as
+// the class of characters JavaScript's /i treats as equal to it: /µ/i becomes /[µΜμ]/i.
 function foldCase(pattern) {
     const flags = pattern.slice(pattern.lastIndexOf('/') + 1)
     if (!flags.includes('i') || !/[^\x00-\x7F]/.test(pattern)) {
         return pattern
     }
 
-    const cases = c => {
-        const lower = c.toLowerCase()
-        const upper = c.toUpperCase()
-        return c > '\x7F' && lower !== upper && lower.length === 1 && upper.length === 1
-            ? lower + upper
-            : null
-    }
+    const cases = c => c > '\x7F' && sameCase(c).length > 1 ? sameCase(c) : null
 
     let result = ''
     let inClass = false
