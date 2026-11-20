@@ -178,22 +178,13 @@ namespace libprisma
             appendUtf8Range(alternatives, 0x10000, 0x10FFFF);
         }
 
-        if (low < 0xD800 && high > 0xDFFF)
+        if (low < 0xD800)
         {
-            appendUtf8Range(alternatives, low, 0xD7FF);
-            appendUtf8Range(alternatives, 0xE000, high);
+            appendUtf8Range(alternatives, low, high < 0xD7FF ? high : 0xD7FF);
         }
-        else if (high < 0xD800 || low > 0xDFFF)
+        if (high > 0xDFFF)
         {
-            appendUtf8Range(alternatives, low, high);
-        }
-        else if (low < 0xD800)
-        {
-            appendUtf8Range(alternatives, low, 0xD7FF);
-        }
-        else if (high > 0xDFFF)
-        {
-            appendUtf8Range(alternatives, 0xE000, high);
+            appendUtf8Range(alternatives, low > 0xE000 ? low : 0xE000, high);
         }
     }
 
