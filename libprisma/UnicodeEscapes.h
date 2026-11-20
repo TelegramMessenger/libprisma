@@ -7,10 +7,11 @@
 namespace libprisma
 {
     // Boost matches over bytes and does not read a \uXXXX escape at all: a pattern holding one
-    // simply never matches. Spell every escape as the bytes of its UTF-8 encoding instead, and
-    // where one sits inside a character class - whose members have to be a single byte each -
-    // lift it out into an alternation. This belongs here rather than in grammars.dat, which
-    // keeps the \u spelling for the clients that match over UTF-16 and read it correctly.
+    // simply never matches. It also reads \xHH as a byte, where JavaScript and java.util.regex
+    // read the code point. Spell every escape above ASCII as the bytes of its UTF-8 encoding
+    // instead, and where one sits inside a character class - whose members have to be a single
+    // byte each - lift it out into an alternation. This belongs here rather than in
+    // grammars.dat, which keeps the original spelling for the clients that match over UTF-16.
 
     inline bool isHexDigit(char c)
     {
@@ -42,6 +43,18 @@ namespace libprisma
         }
 
         return value;
+    }
+
+    // the code point of the \xHH escape at begin, or -1 if there is not one there
+    inline int byteEscapeAt(std::string_view pattern, size_t begin)
+    {
+        if (begin + 4 > pattern.size() || pattern[begin] != '\\' || pattern[begin + 1] != 'x'
+            || !isHexDigit(pattern[begin + 2]) || !isHexDigit(pattern[begin + 3]))
+        {
+            return -1;
+        }
+
+        return hexValue(pattern[begin + 2]) * 16 + hexValue(pattern[begin + 3]);
     }
 
     inline void appendByte(std::string& out, unsigned char byte)
@@ -158,6 +171,13 @@ namespace libprisma
     // encoding, so no text can contain them.
     inline void appendCodePoints(std::vector<std::string>& alternatives, int low, int high)
     {
+        // In JavaScript a range over every surrogate takes both halves of each pair, so it
+        // takes every character above U+FFFF too.
+        if (low <= 0xD800 && high >= 0xDFFF)
+        {
+            appendUtf8Range(alternatives, 0x10000, 0x10FFFF);
+        }
+
         if (low < 0xD800 && high > 0xDFFF)
         {
             appendUtf8Range(alternatives, low, 0xD7FF);
@@ -177,11 +197,16 @@ namespace libprisma
         }
     }
 
-    // The code point at begin, joining a surrogate pair into the one character it spells, with
-    // the characters it occupies in length. A lone \uXXXX is left to Boost, which expands it
-    // to UTF-8 itself; a pair it would expand to two three byte sequences instead.
+    // The code point of the \u or \x escape at begin, joining a surrogate pair into the one
+    // character it spells, with the characters it occupies in length; -1 if there is none.
     inline int codePointAt(std::string_view pattern, size_t begin, size_t& length)
     {
+        if (const int byte = byteEscapeAt(pattern, begin); byte >= 0)
+        {
+            length = 4;
+            return byte;
+        }
+
         const int value = unicodeEscapeAt(pattern, begin);
         length = value < 0 ? 0 : 6;
 
@@ -201,8 +226,9 @@ namespace libprisma
     struct ClassMember
     {
         std::string_view text;  // as spelled in the pattern, "a", "\\n", "\\u2227", "a-z"
-        int low = -1;           // code point, for a member that is a lone \u escape
-        int high = -1;          // and the other end, when the member is a range of them
+        bool range = false;     // "a-z" rather than "a"
+        int low = -1;           // code point of the character, or of the start of the range;
+        int high = -1;          // of its end; -1 for a set such as \w, or no end at all
     };
 
     struct CharacterClass
@@ -213,17 +239,47 @@ namespace libprisma
         std::vector<ClassMember> members;
     };
 
+    // The character at begin inside a class, as its code point, with the characters it occupies;
+    // -1 for a set such as \w or \d, and for an escape whose meaning differs between engines.
+    inline size_t classCharacterAt(std::string_view pattern, size_t at, int& codePoint)
+    {
+        size_t length = 0;
+        codePoint = codePointAt(pattern, at, length);
+        if (codePoint >= 0)
+        {
+            return length;
+        }
+
+        const unsigned char c = static_cast<unsigned char>(pattern[at]);
+        if (c != '\\' || at + 1 >= pattern.size())
+        {
+            codePoint = c < 0x80 ? c : -1;
+            return 1;
+        }
+
+        const unsigned char escaped = static_cast<unsigned char>(pattern[at + 1]);
+        switch (escaped)
+        {
+        case 'n': codePoint = '\n'; break;
+        case 'r': codePoint = '\r'; break;
+        case 't': codePoint = '\t'; break;
+        case 'f': codePoint = '\f'; break;
+        case 'b': codePoint = '\b'; break;
+        default:
+            // \w, \d, \s and the rest are sets; an escaped punctuation mark is itself
+            const bool letterOrDigit = (escaped >= '0' && escaped <= '9')
+                || ((escaped | 0x20) >= 'a' && (escaped | 0x20) <= 'z');
+            codePoint = letterOrDigit || escaped >= 0x80 ? -1 : escaped;
+            break;
+        }
+        return 2;
+    }
+
     // one class member starting at begin, or 0 if the class ends there
     inline size_t readMember(std::string_view pattern, size_t begin, ClassMember& member)
     {
         auto unit = [&](size_t at, int& codePoint) -> size_t {
-            size_t length = 0;
-            codePoint = codePointAt(pattern, at, length);
-            if (codePoint >= 0)
-            {
-                return length;
-            }
-            return pattern[at] == '\\' && at + 1 < pattern.size() ? 2 : 1;
+            return classCharacterAt(pattern, at, codePoint);
         };
 
         int low = -1;
@@ -235,6 +291,7 @@ namespace libprisma
         {
             int high = -1;
             size_t tail = unit(at + 1, high);
+            member.range = true;
             member.low = low;
             member.high = high;
             member.text = pattern.substr(begin, length + 1 + tail);
@@ -336,23 +393,42 @@ namespace libprisma
 
         for (const auto& member : characters.members)
         {
-            if (member.low <= 0x7F && member.high <= 0x7F)
+            if (!member.range)
+            {
+                if (member.low > 0x7F)
+                {
+                    appendCodePoints(alternatives, member.low, member.low);
+                }
+                else
+                {
+                    narrow += member.text;
+                }
+            }
+            else if (member.low < 0 || member.high < 0 || member.low > member.high)
+            {
+                // a range this code cannot read; leave a class above ASCII to Boost as it is
+                if (member.low > 0x7F || member.high > 0x7F)
+                {
+                    return 0;
+                }
+                narrow += member.text;
+            }
+            else if (member.high <= 0x7F)
             {
                 narrow += member.text;
             }
-            else if (member.high < 0)
-            {
-                appendCodePoints(alternatives, member.low, member.low);
-            }
-            else if (member.low >= 0 && member.low <= member.high)
-            {
-                appendCodePoints(alternatives, member.low, member.high);
-            }
             else
             {
-                // A range whose end is above ASCII but whose start is not a \u escape. This
-                // code does not convert such ranges, so leave the whole class unchanged.
-                return 0;
+                // the ASCII part of the range stays in the class, where the i flag applies to it
+                int low = member.low;
+                if (low <= 0x7F)
+                {
+                    appendByte(narrow, static_cast<unsigned char>(low));
+                    narrow += '-';
+                    appendByte(narrow, 0x7F);
+                    low = 0x80;
+                }
+                appendCodePoints(alternatives, low, member.high);
             }
         }
 
@@ -399,7 +475,12 @@ namespace libprisma
 
     inline std::string widenUnicodeClasses(std::string_view pattern)
     {
-        if (pattern.find("\\u") == std::string_view::npos)
+        bool wide = pattern.find("\\u") != std::string_view::npos;
+        for (size_t at = pattern.find("\\x"); !wide && at != std::string_view::npos; at = pattern.find("\\x", at + 2))
+        {
+            wide = byteEscapeAt(pattern, at) > 0x7F;
+        }
+        if (!wide)
         {
             return std::string{ pattern };
         }

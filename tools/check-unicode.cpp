@@ -344,6 +344,24 @@ int main(int argc, char** argv)
     failed += !CheckPattern("[^\\u2019][\\s\\S]", "\U0001F600", false);
     failed += !CheckPattern("[^\\u2019][\\s\\S]", "\U00000416a", true);
 
+    // \xHH is a code point, as JavaScript and java.util.regex read it, not a byte: inside a
+    // class, at either end of a range, and outside a class.
+    failed += !CheckPattern("[\\u00e0-\\xff]+", "\U000000E0\U000000F0\U000000FF", true);
+    failed += !CheckPattern("[\\u00e0-\\xff]", "f", false);
+    failed += !CheckPattern("[\\xa0-\\u00ff]+", "\U000000A0\U000000E9", true);
+    failed += !CheckPattern("[\\xa0-\\xff]", "\U000000E9", true);
+    failed += !CheckPattern("[^\\x85\\u2019]", "\U00000085", false);
+    failed += !CheckPattern("[^\\x85\\u2019]", "\U0000041F", true);
+    failed += !CheckPattern("a\\xe9+", "a\U000000E9\U000000E9", true);
+    failed += !CheckPattern("[a-\\u00ff]+", "az\U000000E9", true);
+
+    // A range over every surrogate takes both halves of each pair in JavaScript, so in UTF-8 it
+    // takes the characters above U+FFFF as well: Prism's "any but ASCII" is \x80 to U+FFFF.
+    failed += !CheckPattern("[\\x80-\\uffff]+", "\U000000E9\U0001F600", true);
+    failed += !CheckPattern("[^\\ud800-\\udfff]", "\U0001F600", false);
+    failed += !CheckPattern("[^\\ud800-\\udfff]", "\U0000FFFF", true);
+    failed += !CheckPattern("[\\x80-\\ud7ff]", "\U0001F600", false);
+
     const auto text = std::string("#iFclude <a>");
     const auto tokens = highlighter.tokenize(text, "brightscript");
     auto result = Inspection();
@@ -612,6 +630,19 @@ int main(int argc, char** argv)
                 { "punctuation", ";" },
             });
     }
+
+    // Prism spells "any character but ASCII" as \xA0 to U+FFFF, as in JavaScript's function names.
+    failed += !CheckTokens(
+        highlighter,
+        "javascript",
+        "функция(1);",
+        {
+            { "function", "функция" },
+            { "punctuation", "(" },
+            { "number", "1" },
+            { "punctuation", ")" },
+            { "punctuation", ";" },
+        });
 
     // A file extension that is no language name reads as itself, as an unknown name does.
     for (const auto& [language, name] : std::vector<std::pair<std::string, std::string>>{

@@ -332,14 +332,9 @@ async function generate() {
 
         function sanitize(pattern) {
             // Unsupported:
-            // UTF-16 ranges
             // [^]    => [\s\S] <- matches any character, including new line
             // []     =>   ??   <- matches _empty_ string
 
-            // All the whitelisted languages have 0xFFFF as maximum range
-            // This is not the case for all the grammars supported by Prisma.
-
-            pattern = pattern.replaceAll("\\uFFFF", "\\xFF");
             pattern = pattern.replaceAll("[^]", "[\\s\\S]");
 
             // TODO: This just bruteforces the regex to work, but of course
