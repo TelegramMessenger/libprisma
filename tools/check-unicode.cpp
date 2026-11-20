@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <locale>
 #include <string>
 #include <thread>
 #include <utility>
@@ -182,16 +183,27 @@ bool CheckAliases(
 bool CheckPattern(
     const std::string& pattern,
     const std::string& text,
-    bool expected)
+    bool expected,
+    bool icase = false)
 {
-    const auto regex = boost::regex(
-        libprisma::widenUnicodeClasses(pattern),
-        boost::regex_constants::ECMAScript | boost::regex_constants::no_mod_m);
-    if (boost::regex_match(text, regex) == expected)
+    try
     {
-        return true;
+        auto flags = boost::regex_constants::ECMAScript | boost::regex_constants::no_mod_m;
+        if (icase)
+        {
+            flags |= boost::regex_constants::icase;
+        }
+        const auto regex = boost::regex(libprisma::widenUnicodeClasses(pattern), flags);
+        if (boost::regex_match(text, regex) == expected)
+        {
+            return true;
+        }
+        std::cerr << "Unexpected match for " << pattern << ": " << text << '\n';
     }
-    std::cerr << "Unexpected match for " << pattern << ": " << text << '\n';
+    catch (const std::exception& e)
+    {
+        std::cerr << "Boost will not take " << pattern << ": " << e.what() << '\n';
+    }
     return false;
 }
 
@@ -247,9 +259,9 @@ bool CheckThreads(const std::string& grammars, const SyntaxHighlighter& referenc
 
 int main(int argc, char** argv)
 {
-    if (argc != 2)
+    if (argc != 2 && argc != 3)
     {
-        std::cerr << "usage: check-unicode <grammars.dat>\n";
+        std::cerr << "usage: check-unicode <grammars.dat> [<locale whose bytes above 0x7F are letters>]\n";
         return 2;
     }
     auto input = std::ifstream(argv[1], std::ios::binary);
@@ -312,6 +324,48 @@ int main(int argc, char** argv)
     failed += !CheckPattern(R"([^^\u2019]+)", "abc", true);
     failed += !CheckPattern(R"([\u201c\u201d]+)", "\u201c\u201d", true);
     failed += !CheckPattern(R"([\uD800-\uDBFF][\uDC00-\uDFFF])", "\U0001F600", true);
+
+    // A range of code points inside a class must match whole UTF-8 characters, whatever the
+    // length of their encoding, and a negated class must consume one whole character, not one
+    // byte. These patterns are plain string literals: "\\u0400" is the escape a pattern holds.
+    failed += !CheckPattern("[\\u0400-\\u04ff]+", "\U0000041F\U00000440\U00000438\U00000432\U00000435\U00000442", true);
+    failed += !CheckPattern("[\\u0400-\\u04ff]+", "Hi", false);
+    failed += !CheckPattern("[\\w\\u0400-\\u0484\\u0487-\\u052f]+", "a_1\U00000401\U00000436\U00000487\U0000052F", true);
+    failed += !CheckPattern("[\\w\\u0400-\\u0484\\u0487-\\u052f]", "\U00000485", false);
+    failed += !CheckPattern("[\\w\\u0400-\\u0484\\u0487-\\u052f]", "\U00000530", false);
+    failed += !CheckPattern("[\\u0061-\\u0800]+", "az\U000000E9\U000007FF\U00000800", true);
+    failed += !CheckPattern("[\\u0061-\\u0800]", "`", false);
+    failed += !CheckPattern("[\\u0061-\\u0800]", "\U00000801", false);
+    failed += !CheckPattern("[\\ua640-\\ua69f\\ufe2e]{2}", "\U0000A640\U0000FE2E", true);
+    failed += !CheckPattern("[\\ud7ff-\\ue000]+", "\U0000D7FF\U0000E000", true);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", "\U00000416", false);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", "_", false);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", " ", true);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", "\U00002014", true);
+    failed += !CheckPattern("[^\\w\\u0400-\\u04ff]{2}", "\U00002014\U0001F600", true);
+    failed += !CheckPattern("[^\\u2019]", "\U00002014", true);
+    // What follows a negated class cannot match the rest of the character the class took.
+    failed += !CheckPattern("[^\\u2019][\\s\\S]", "\U00000416", false);
+    failed += !CheckPattern("[^\\u2019][\\s\\S]", "\U0001F600", false);
+    failed += !CheckPattern("[^\\u2019][\\s\\S]", "\U00000416a", true);
+
+    // \xHH is a code point, as JavaScript and java.util.regex read it, not a byte: inside a
+    // class, at either end of a range, and outside a class.
+    failed += !CheckPattern("[\\u00e0-\\xff]+", "\U000000E0\U000000F0\U000000FF", true);
+    failed += !CheckPattern("[\\u00e0-\\xff]", "f", false);
+    failed += !CheckPattern("[\\xa0-\\u00ff]+", "\U000000A0\U000000E9", true);
+    failed += !CheckPattern("[\\xa0-\\xff]", "\U000000E9", true);
+    failed += !CheckPattern("[^\\x85\\u2019]", "\U00000085", false);
+    failed += !CheckPattern("[^\\x85\\u2019]", "\U0000041F", true);
+    failed += !CheckPattern("a\\xe9+", "a\U000000E9\U000000E9", true);
+    failed += !CheckPattern("[a-\\u00ff]+", "az\U000000E9", true);
+
+    // A range over every surrogate takes both halves of each pair in JavaScript, so in UTF-8 it
+    // takes the characters above U+FFFF as well: Prism's "any but ASCII" is \x80 to U+FFFF.
+    failed += !CheckPattern("[\\x80-\\uffff]+", "\U000000E9\U0001F600", true);
+    failed += !CheckPattern("[^\\ud800-\\udfff]", "\U0001F600", false);
+    failed += !CheckPattern("[^\\ud800-\\udfff]", "\U0000FFFF", true);
+    failed += !CheckPattern("[\\x80-\\ud7ff]", "\U0001F600", false);
 
     const auto text = std::string("#iFclude <a>");
     const auto tokens = highlighter.tokenize(text, "brightscript");
@@ -530,8 +584,75 @@ int main(int argc, char** argv)
             { "string", "\"a\"" },
         });
 
+    // BSL keywords can be Cyrillic or Latin, in any letter case. A keyword must be a whole word:
+    // in "ПеременнаяЕсли" the trailing "Если" is part of a name, not a keyword.
+    failed += !CheckTokens(
+        highlighter,
+        "bsl",
+        "Процедура Тест() Экспорт\n"
+        "\tЕСЛИ НЕ а Тогда КонецЕсли;\n"
+        "\tПеременнаяЕсли = 1;\n"
+        "КонецПроцедуры",
+        {
+            { "keyword", "Процедура" },
+            { "punctuation", "(" },
+            { "punctuation", ")" },
+            { "keyword", "Экспорт" },
+            { "keyword", "ЕСЛИ" },
+            { "operator", "НЕ" },
+            { "keyword", "Тогда" },
+            { "keyword", "КонецЕсли" },
+            { "punctuation", ";" },
+            { "operator", "=" },
+            { "number", "1" },
+            { "punctuation", ";" },
+            { "keyword", "КонецПроцедуры" },
+        });
+    failed += !CheckTokens(
+        highlighter,
+        "oscript",
+        "Сообщить(\"Привет\");",
+        {
+            { "punctuation", "(" },
+            { "string", "\"Привет\"" },
+            { "punctuation", ")" },
+            { "punctuation", ";" },
+        });
+
+    // A letter in a case-insensitive pattern matches what JavaScript's /i matches: every
+    // character with the same upper case. OpenQASM's "µs" is micro sign, Greek mu or capital Mu.
+    for (const auto& micro : { "\U000000B5", "\U000003BC", "\U0000039C" })
+    {
+        failed += !CheckTokens(
+            highlighter,
+            "openqasm",
+            std::string("delay[5") + micro + "s] q;",
+            {
+                { "keyword", "delay" },
+                { "punctuation", "[" },
+                { "number", std::string("5") + micro + "s" },
+                { "punctuation", "]" },
+                { "punctuation", ";" },
+            });
+    }
+
+    // Prism spells "any character but ASCII" as \xA0 to U+FFFF, as in JavaScript's function names.
+    failed += !CheckTokens(
+        highlighter,
+        "javascript",
+        "функция(1);",
+        {
+            { "function", "функция" },
+            { "punctuation", "(" },
+            { "number", "1" },
+            { "punctuation", ")" },
+            { "punctuation", ";" },
+        });
+
     // A file extension that is no language name reads as itself, as an unknown name does.
     for (const auto& [language, name] : std::vector<std::pair<std::string, std::string>>{
+        { "bsl", "BSL (1C:Enterprise)" },
+        { "oscript", "OneScript" },
         { "rs", "rs" },
         { "rust", "Rust" },
         { "nope", "nope" },
@@ -571,6 +692,38 @@ int main(int argc, char** argv)
         });
 
     failed += !CheckThreads(grammars, highlighter);
+
+    // With icase, Boost folds each byte by the locale it compiles a pattern under: on Windows
+    // the ANSI code page, where bytes above 0x7F are letters with a case. The UTF-8 bytes this
+    // library writes must not be folded: in CP1251, D0 B2 ("в") would equal D0 B3 ("г"), and
+    // the range 80-84 would turn into 90-84, which Boost rejects.
+    if (argc == 3)
+    {
+        std::locale::global(std::locale(argv[2]));
+
+        failed += !CheckPattern("[\\u0432\\u0412]", "\U00000433", false, true);
+        failed += !CheckPattern("[\\u0438\\u0418]", "\U00000428", false, true);
+        failed += !CheckPattern("[\\u0432\\u0412]", "\U00000432", true, true);
+        failed += !CheckPattern("[\\u0400-\\u0484]", "\U00000480", true, true);
+        failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", "\U00000416", false, true);
+
+        const auto code = std::string(
+            "Процедура Тест() Экспорт\n"
+            "\tЕСЛИ НЕ а Тогда КонецЕсли;\n"
+            "\tПеременнаяЕсли = 1;\n"
+            "КонецПроцедуры");
+        auto expected = Inspection();
+        Inspect(highlighter.tokenize(code, "bsl"), expected);
+        auto result = Inspection();
+        Inspect(SyntaxHighlighter(grammars).tokenize(code, "bsl"), result);
+        if (result.tokens != expected.tokens)
+        {
+            std::cerr << "BSL tokens differ under " << argv[2] << '\n';
+            ++failed;
+        }
+
+        std::locale::global(std::locale::classic());
+    }
 
     std::cout << failed << " Unicode highlighting checks failed\n";
     return failed ? 1 : 0;

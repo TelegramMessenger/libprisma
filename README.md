@@ -87,6 +87,7 @@ The new version of `grammars.dat` will appear in the `libprisma/grammars.dat`.
 |`Brainfuck`|`brainfuck`|
 |`BrightScript`|`brightscript`|
 |`Bro`|`bro`|
+|`BSL (1C:Enterprise)`|`bsl`,`oscript`|
 |`CFScript`|`cfscript`,`cfc`|
 |`ChaiScript`|`chaiscript`|
 |`CIL`|`cil`|

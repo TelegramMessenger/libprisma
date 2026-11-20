@@ -125,6 +125,78 @@ function escapeNonAscii(pattern) {
     return result
 }
 
+// What JavaScript's /i compares a character as, without the u flag (ECMAScript's
+// Canonicalize): its upper case, unless that is more than one character, or is ASCII while
+// the character is not. So /ſ/i matches only ſ, though "ſ".toUpperCase() is "S".
+function canonicalize(c) {
+    const upper = c.toUpperCase()
+    if (upper.length !== 1) {
+        return c
+    }
+    return c.charCodeAt(0) >= 0x80 && upper.charCodeAt(0) < 0x80 ? c : upper
+}
+
+// every UTF-16 code unit, grouped by what /i compares it as
+let caseGroups = null
+
+function sameCase(c) {
+    if (!caseGroups) {
+        caseGroups = new Map()
+        for (let i = 0; i < 0x10000; i++) {
+            const x = String.fromCharCode(i)
+            const key = canonicalize(x)
+            caseGroups.set(key, (caseGroups.get(key) || '') + x)
+        }
+    }
+    return caseGroups.get(canonicalize(c))
+}
+
+// Boost compares bytes, and java.util.regex folds only ASCII without UNICODE_CASE, so /и/i
+// would not match "И". Each non-ASCII letter of a case-insensitive pattern is spelled out as
+// the class of characters JavaScript's /i treats as equal to it: /µ/i becomes /[µΜμ]/i.
+function foldCase(pattern) {
+    const flags = pattern.slice(pattern.lastIndexOf('/') + 1)
+    if (!flags.includes('i') || !/[^\x00-\x7F]/.test(pattern)) {
+        return pattern
+    }
+
+    const cases = c => c > '\x7F' && sameCase(c).length > 1 ? sameCase(c) : null
+
+    let result = ''
+    let inClass = false
+
+    for (let i = 0; i < pattern.length; i++) {
+        const c = pattern[i]
+
+        if (c === '\\') {
+            result += pattern.substr(i, 2)
+            i++
+            continue
+        }
+
+        if (inClass) {
+            // A letter inside a class, such as [а-я], would need its other case added to the
+            // class as well. No grammar has one yet, so stop rather than emit a pattern that
+            // silently stays case-sensitive.
+            if (cases(c)) {
+                throw new Error(`foldCase does not handle the letter ${c} inside a character class: ${pattern}`)
+            }
+            if (c === ']') {
+                inClass = false
+            }
+        } else if (c === '[') {
+            inClass = true
+        } else if (cases(c)) {
+            result += '[' + cases(c) + ']'
+            continue
+        }
+
+        result += c
+    }
+
+    return result
+}
+
 function unique(a, fn) {
     if (a.length === 0 || a.length === 1) {
         return a;
@@ -260,14 +332,9 @@ async function generate() {
 
         function sanitize(pattern) {
             // Unsupported:
-            // UTF-16 ranges
             // [^]    => [\s\S] <- matches any character, including new line
             // []     =>   ??   <- matches _empty_ string
 
-            // All the whitelisted languages have 0xFFFF as maximum range
-            // This is not the case for all the grammars supported by Prisma.
-
-            pattern = pattern.replaceAll("\\uFFFF", "\\xFF");
             pattern = pattern.replaceAll("[^]", "[\\s\\S]");
 
             // TODO: This just bruteforces the regex to work, but of course
@@ -280,7 +347,7 @@ async function generate() {
             pattern = pattern.replaceAll("|[])", ")");
             pattern = pattern.replaceAll(":[]", ":");
 
-            return escapeNonAscii(normalizeEscapes(pattern))
+            return escapeNonAscii(foldCase(normalizeEscapes(pattern)))
         }
 
         for (var token in copy) {
@@ -347,7 +414,6 @@ async function generate() {
     }
 
     var unsupported = [
-        "bsl",
         "coq",
         "gherkin",
         "jexl",
