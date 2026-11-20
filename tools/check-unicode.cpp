@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <locale>
 #include <string>
 #include <thread>
 #include <utility>
@@ -182,13 +183,17 @@ bool CheckAliases(
 bool CheckPattern(
     const std::string& pattern,
     const std::string& text,
-    bool expected)
+    bool expected,
+    bool icase = false)
 {
     try
     {
-        const auto regex = boost::regex(
-            libprisma::widenUnicodeClasses(pattern),
-            boost::regex_constants::ECMAScript | boost::regex_constants::no_mod_m);
+        auto flags = boost::regex_constants::ECMAScript | boost::regex_constants::no_mod_m;
+        if (icase)
+        {
+            flags |= boost::regex_constants::icase;
+        }
+        const auto regex = boost::regex(libprisma::widenUnicodeClasses(pattern), flags);
         if (boost::regex_match(text, regex) == expected)
         {
             return true;
@@ -254,9 +259,9 @@ bool CheckThreads(const std::string& grammars, const SyntaxHighlighter& referenc
 
 int main(int argc, char** argv)
 {
-    if (argc != 2)
+    if (argc != 2 && argc != 3)
     {
-        std::cerr << "usage: check-unicode <grammars.dat>\n";
+        std::cerr << "usage: check-unicode <grammars.dat> [<locale whose bytes above 0x7F are letters>]\n";
         return 2;
     }
     auto input = std::ifstream(argv[1], std::ios::binary);
@@ -687,6 +692,38 @@ int main(int argc, char** argv)
         });
 
     failed += !CheckThreads(grammars, highlighter);
+
+    // With icase, Boost folds each byte by the locale it compiles a pattern under: on Windows
+    // the ANSI code page, where bytes above 0x7F are letters with a case. The UTF-8 bytes this
+    // library writes must not be folded: in CP1251, D0 B2 ("в") would equal D0 B3 ("г"), and
+    // the range 80-84 would turn into 90-84, which Boost rejects.
+    if (argc == 3)
+    {
+        std::locale::global(std::locale(argv[2]));
+
+        failed += !CheckPattern("[\\u0432\\u0412]", "\U00000433", false, true);
+        failed += !CheckPattern("[\\u0438\\u0418]", "\U00000428", false, true);
+        failed += !CheckPattern("[\\u0432\\u0412]", "\U00000432", true, true);
+        failed += !CheckPattern("[\\u0400-\\u0484]", "\U00000480", true, true);
+        failed += !CheckPattern("[^\\w\\u0400-\\u04ff]", "\U00000416", false, true);
+
+        const auto code = std::string(
+            "Процедура Тест() Экспорт\n"
+            "\tЕСЛИ НЕ а Тогда КонецЕсли;\n"
+            "\tПеременнаяЕсли = 1;\n"
+            "КонецПроцедуры");
+        auto expected = Inspection();
+        Inspect(highlighter.tokenize(code, "bsl"), expected);
+        auto result = Inspection();
+        Inspect(SyntaxHighlighter(grammars).tokenize(code, "bsl"), result);
+        if (result.tokens != expected.tokens)
+        {
+            std::cerr << "BSL tokens differ under " << argv[2] << '\n';
+            ++failed;
+        }
+
+        std::locale::global(std::locale::classic());
+    }
 
     std::cout << failed << " Unicode highlighting checks failed\n";
     return failed ? 1 : 0;

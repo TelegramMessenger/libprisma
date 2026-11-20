@@ -366,7 +366,7 @@ namespace libprisma
             return 0;
         }
 
-        out += "(?:[\\xF0-\\xF4][\\x80-\\xBF]{3})";
+        out += "(?-i:[\\xF0-\\xF4][\\x80-\\xBF]{3})";
         return end - begin;
     }
 
@@ -423,26 +423,36 @@ namespace libprisma
             }
         }
 
+        std::string any;
         if (!narrow.empty())
         {
-            std::string members = "[";
+            any += '[';
             if (narrow.front() == '^')
             {
-                members += '\\';
+                any += '\\';
             }
-            members += narrow;
-            members += ']';
-            alternatives.insert(alternatives.begin(), std::move(members));
+            any += narrow;
+            any += ']';
         }
 
-        std::string any;
-        for (size_t i = 0; i < alternatives.size(); ++i)
+        // The UTF-8 bytes go in (?-i:), so that icase does not fold them by the locale's code
+        // page; the narrow members stay outside it, where icase applies to them.
+        if (!alternatives.empty())
         {
-            if (i > 0)
+            if (!any.empty())
             {
                 any += '|';
             }
-            any += alternatives[i];
+            any += "(?-i:";
+            for (size_t i = 0; i < alternatives.size(); ++i)
+            {
+                if (i > 0)
+                {
+                    any += '|';
+                }
+                any += alternatives[i];
+            }
+            any += ')';
         }
 
         if (characters.negated)
@@ -454,7 +464,7 @@ namespace libprisma
             {
                 out += "(?!" + any + ")";
             }
-            out += "(?:[\\x00-\\x7F]|[\\xC0-\\xDF][\\x80-\\xBF]|[\\xE0-\\xEF][\\x80-\\xBF]{2}|[\\xF0-\\xF7][\\x80-\\xBF]{3}))";
+            out += "(?-i:[\\x00-\\x7F]|[\\xC0-\\xDF][\\x80-\\xBF]|[\\xE0-\\xEF][\\x80-\\xBF]{2}|[\\xF0-\\xF7][\\x80-\\xBF]{3}))";
         }
         else
         {
@@ -489,11 +499,12 @@ namespace libprisma
                 if (codePoint >= 0)
                 {
                     // grouped, because a quantifier after it has to apply to the whole
-                    // character and not to the last byte of its encoding
+                    // character and not to the last byte of its encoding, and with icase off,
+                    // so that the bytes are not folded by the locale's code page
                     const bool multiByte = codePoint > 0x7F;
                     if (multiByte)
                     {
-                        out += "(?:";
+                        out += "(?-i:";
                     }
                     appendUtf8(out, codePoint);
                     if (multiByte)
